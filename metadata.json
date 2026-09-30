@@ -1,0 +1,6 @@
+{
+  "name": "LoanConnect",
+  "description": "Comprehensive fintech loan management and payment platform connecting financiers, borrowers, and admins with real-time tracking, collections, AI assistant, and reports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
