@@ -434,5 +434,176 @@ object DemoDataSeeder {
             )
         )
         dao.insertAuditLogs(logs)
+
+        // 12. Linked Bank Accounts
+        val bankAccounts = listOf(
+            BankAccountEntity(
+                id = "BANK-001",
+                userId = "user_b1",
+                bankName = "HDFC Bank",
+                accountNumber = "5010049281726",
+                accountNumberLast4 = "1726",
+                ifscCode = "HDFC0000240",
+                accountHolderName = "Priya Sharma",
+                accountType = "Savings",
+                isVerified = true,
+                isPrimary = true,
+                upiId = "priyasharma@okhdfcbank"
+            ),
+            BankAccountEntity(
+                id = "BANK-002",
+                userId = "user_f1",
+                bankName = "State Bank of India",
+                accountNumber = "203948571928",
+                accountNumberLast4 = "1928",
+                ifscCode = "SBIN0004123",
+                accountHolderName = "Ramesh Gupta",
+                accountType = "Current",
+                isVerified = true,
+                isPrimary = true,
+                upiId = "rameshfinance@oksbi"
+            )
+        )
+        bankAccounts.forEach { dao.insertBankAccount(it) }
+
+        // 13. Personal Finance - Expenses
+        val expenses = listOf(
+            ExpenseEntity(
+                id = "EXP-101",
+                userId = "user_b1",
+                title = "Loan Repayment - Ramesh Financial",
+                amount = 10500.0,
+                category = "Loan EMI",
+                paymentMethod = "Google Pay",
+                bankAccountId = "BANK-001",
+                date = "2026-09-10",
+                notes = "September EMI for LOAN-000101 via Google Pay UPI"
+            ),
+            ExpenseEntity(
+                id = "EXP-102",
+                userId = "user_b1",
+                title = "Monthly Grocery Stock (DMart)",
+                amount = 4650.0,
+                category = "Groceries",
+                paymentMethod = "Connected Bank (HDFC)",
+                bankAccountId = "BANK-001",
+                date = "2026-09-12",
+                notes = "Monthly essentials and pantry groceries"
+            ),
+            ExpenseEntity(
+                id = "EXP-103",
+                userId = "user_b1",
+                title = "Electricity & BESCOM Utility Bill",
+                amount = 2150.0,
+                category = "Utilities",
+                paymentMethod = "Google Pay",
+                date = "2026-09-15",
+                notes = "Auto-billed via Google Pay"
+            ),
+            ExpenseEntity(
+                id = "EXP-104",
+                userId = "user_b1",
+                title = "Family Dinner at Bistro",
+                amount = 1420.0,
+                category = "Food & Dining",
+                paymentMethod = "Google Pay",
+                date = "2026-09-18",
+                notes = "Weekend family dining"
+            ),
+            ExpenseEntity(
+                id = "EXP-105",
+                userId = "user_b1",
+                title = "Fuel & Metro Card Recharge",
+                amount = 1800.0,
+                category = "Transportation",
+                paymentMethod = "PhonePe",
+                date = "2026-09-21",
+                notes = "Commute expenses"
+            ),
+            ExpenseEntity(
+                id = "EXP-106",
+                userId = "user_b1",
+                title = "Clothing & Festive Shopping",
+                amount = 3200.0,
+                category = "Shopping",
+                paymentMethod = "Connected Bank (HDFC)",
+                bankAccountId = "BANK-001",
+                date = "2026-09-24",
+                notes = "Festive seasonal apparel"
+            ),
+            ExpenseEntity(
+                id = "EXP-107",
+                userId = "user_b1",
+                title = "Apollo Pharmacy Medicines",
+                amount = 890.0,
+                category = "Health",
+                paymentMethod = "Paytm",
+                date = "2026-09-27",
+                notes = "Routine vitamins and prescription"
+            )
+        )
+        dao.insertExpenses(expenses)
+
+        // 14. Personal Finance - Category Budgets
+        val currentMonth = "2026-09"
+        val budgets = listOf(
+            BudgetEntity(
+                id = "BUD-user_b1_Overall_$currentMonth",
+                userId = "user_b1",
+                category = "Overall",
+                monthlyLimit = 40000.0,
+                month = currentMonth,
+                alertThresholdPercent = 80.0
+            ),
+            BudgetEntity(
+                id = "BUD-user_b1_Loan_EMI_$currentMonth",
+                userId = "user_b1",
+                category = "Loan EMI",
+                monthlyLimit = 12000.0,
+                month = currentMonth,
+                alertThresholdPercent = 90.0
+            ),
+            BudgetEntity(
+                id = "BUD-user_b1_Groceries_$currentMonth",
+                userId = "user_b1",
+                category = "Groceries",
+                monthlyLimit = 6000.0,
+                month = currentMonth,
+                alertThresholdPercent = 80.0
+            ),
+            BudgetEntity(
+                id = "BUD-user_b1_Food_Dining_$currentMonth",
+                userId = "user_b1",
+                category = "Food & Dining",
+                monthlyLimit = 3500.0,
+                month = currentMonth,
+                alertThresholdPercent = 75.0
+            ),
+            BudgetEntity(
+                id = "BUD-user_b1_Utilities_$currentMonth",
+                userId = "user_b1",
+                category = "Utilities",
+                monthlyLimit = 3000.0,
+                month = currentMonth,
+                alertThresholdPercent = 80.0
+            ),
+            BudgetEntity(
+                id = "BUD-user_b1_Transportation_$currentMonth",
+                userId = "user_b1",
+                category = "Transportation",
+                monthlyLimit = 2500.0,
+                month = currentMonth,
+                alertThresholdPercent = 80.0
+            ),
+            BudgetEntity(
+                id = "BUD-user_b1_Shopping_$currentMonth",
+                userId = "user_b1",
+                category = "Shopping",
+                monthlyLimit = 4000.0,
+                month = currentMonth,
+                alertThresholdPercent = 80.0
+            )
+        )
+        dao.insertBudgets(budgets)
     }
 }

@@ -30,6 +30,7 @@ fun HelpAndSupportScreen(
 ) {
     var showCreateTicketDialog by remember { mutableStateOf(false) }
     var showReportDialog by remember { mutableStateOf(false) }
+    var showDisclosuresDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier
@@ -137,6 +138,19 @@ fun HelpAndSupportScreen(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Report User", color = OverdueRed)
                 }
+            }
+        }
+
+        // Regulatory & Loan Terms Disclosure Button
+        item {
+            OutlinedButton(
+                onClick = { showDisclosuresDialog = true },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.Policy, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Regulatory & Personal Loan Disclosures (APR & Terms)")
             }
         }
 
@@ -286,6 +300,97 @@ fun HelpAndSupportScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Submit Formal Report")
+                    }
+                }
+            }
+        }
+    }
+
+    // Regulatory & Google Play Personal Loans Disclosure Dialog
+    if (showDisclosuresDialog) {
+        Dialog(onDismissRequest = { showDisclosuresDialog = false }) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp)
+            ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .padding(20.dp)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Regulatory Disclosures", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            IconButton(onClick = { showDisclosuresDialog = false }) {
+                                Icon(Icons.Default.Close, contentDescription = null)
+                            }
+                        }
+                    }
+
+                    item {
+                        Text("Google Play Financial Services & Personal Loans Compliance", fontWeight = FontWeight.Bold, color = LoanPrimary, fontSize = 13.sp)
+                    }
+
+                    item {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("• Minimum Repayment Period: 61 days (3 months)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text("• Maximum Repayment Period: 36 months (3 years)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text("• Annual Percentage Rate (APR): 9.0% to 24.0% per annum", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text("• Processing Fees: 1.0% to 2.0% (one-time)", fontSize = 12.sp)
+                                Text("• Platform Technology Fee: 0.5%", fontSize = 12.sp)
+                                Text("• Zero short-term payday loans: LoanConnect does not support loans requiring full repayment in 60 days or less.", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+
+                    item {
+                        Text("Representative Example of Total Loan Cost:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("Principal Amount Borrowed: ₹50,000", fontSize = 12.sp)
+                                Text("Tenure: 12 Months", fontSize = 12.sp)
+                                Text("Interest Rate (APR): 12% per annum", fontSize = 12.sp)
+                                Text("Processing Fee (1%): ₹500", fontSize = 12.sp)
+                                Text("Platform Fee: ₹250", fontSize = 12.sp)
+                                Text("Total Interest Payable: ₹6,000", fontSize = 12.sp)
+                                Text("Total Amount Payable: ₹56,750", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = LoanPrimary)
+                                Text("Monthly Installment (EMI): ₹4,729", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    item {
+                        Text("Data Privacy & Security:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(
+                            "All customer financial information is strictly isolated. We do not store raw payment card data, UPI PINs, or banking passwords. End-to-end encryption is used for all transactions.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    item {
+                        Button(
+                            onClick = { showDisclosuresDialog = false },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("I Understand")
+                        }
                     }
                 }
             }

@@ -21,9 +21,12 @@ import com.example.data.model.*
         SupportTicketEntity::class,
         UserReportEntity::class,
         BlockedUserEntity::class,
-        AuditLogEntity::class
+        AuditLogEntity::class,
+        BankAccountEntity::class,
+        ExpenseEntity::class,
+        BudgetEntity::class
     ],
-    version = 1,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

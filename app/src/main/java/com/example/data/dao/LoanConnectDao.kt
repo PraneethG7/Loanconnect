@@ -23,6 +23,9 @@ interface LoanConnectDao {
     @Query("SELECT * FROM users WHERE role = :role")
     fun getUsersByRole(role: UserRole): Flow<List<UserEntity>>
 
+    @Query("SELECT * FROM users WHERE email = :query OR phone = :query LIMIT 1")
+    suspend fun getUserByEmailOrPhone(query: String): UserEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertUser(user: UserEntity)
 
@@ -214,4 +217,52 @@ interface LoanConnectDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAuditLogs(logs: List<AuditLogEntity>)
+
+    // --- Bank Accounts ---
+    @Query("SELECT * FROM bank_accounts WHERE userId = :userId ORDER BY isPrimary DESC, createdAt DESC")
+    fun getBankAccountsForUser(userId: String): Flow<List<BankAccountEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBankAccount(bankAccount: BankAccountEntity)
+
+    @Delete
+    suspend fun deleteBankAccount(bankAccount: BankAccountEntity)
+
+    @Query("UPDATE bank_accounts SET isPrimary = 0 WHERE userId = :userId")
+    suspend fun clearPrimaryBankAccounts(userId: String)
+
+    @Query("UPDATE bank_accounts SET isPrimary = 1 WHERE id = :bankAccountId AND userId = :userId")
+    suspend fun setPrimaryBankAccount(userId: String, bankAccountId: String)
+
+    // --- Real-time Expense Tracking ---
+    @Query("SELECT * FROM expenses WHERE userId = :userId ORDER BY date DESC, createdAt DESC")
+    fun getExpensesForUser(userId: String): Flow<List<ExpenseEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertExpense(expense: ExpenseEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertExpenses(expenses: List<ExpenseEntity>)
+
+    @Update
+    suspend fun updateExpense(expense: ExpenseEntity)
+
+    @Delete
+    suspend fun deleteExpense(expense: ExpenseEntity)
+
+    // --- Budget Visualization ---
+    @Query("SELECT * FROM budgets WHERE userId = :userId ORDER BY category ASC")
+    fun getBudgetsForUser(userId: String): Flow<List<BudgetEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBudget(budget: BudgetEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBudgets(budgets: List<BudgetEntity>)
+
+    @Update
+    suspend fun updateBudget(budget: BudgetEntity)
+
+    @Delete
+    suspend fun deleteBudget(budget: BudgetEntity)
 }

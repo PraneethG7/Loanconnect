@@ -103,6 +103,7 @@ data class UserEntity(
     val standardInterestType: InterestType = InterestType.MONTHLY,
     val supportedMethods: String = "UPI, Bank Transfer, Net Banking, Card, Cash",
     val languages: String = "English, Hindi, Tamil",
+    val password: String = "password123",
     val createdAt: Long = System.currentTimeMillis()
 )
 
@@ -293,3 +294,46 @@ data class AuditLogEntity(
     val details: String,
     val timestamp: Long = System.currentTimeMillis()
 )
+
+@Entity(tableName = "bank_accounts")
+data class BankAccountEntity(
+    @PrimaryKey val id: String, // "BANK-101"
+    val userId: String,
+    val bankName: String, // "HDFC Bank", "State Bank of India", etc.
+    val accountNumber: String, // "5010049281726"
+    val accountNumberLast4: String, // "1726"
+    val ifscCode: String, // "HDFC0000240"
+    val accountHolderName: String,
+    val accountType: String = "Savings", // "Savings", "Current"
+    val isVerified: Boolean = true,
+    val isPrimary: Boolean = true,
+    val upiId: String = "",
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "expenses")
+data class ExpenseEntity(
+    @PrimaryKey val id: String, // "EXP-1001"
+    val userId: String,
+    val title: String,
+    val amount: Double,
+    val category: String, // "Food & Dining", "Groceries", "Loan EMI", "Transportation", "Utilities", "Shopping", "Health", "Entertainment", "Education", "Other"
+    val paymentMethod: String, // "Google Pay", "PhonePe", "Paytm", "Connected Bank (HDFC)", "UPI", "Debit Card", "Cash"
+    val bankAccountId: String? = null,
+    val date: String, // "YYYY-MM-DD"
+    val notes: String = "",
+    val isRecurring: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "budgets")
+data class BudgetEntity(
+    @PrimaryKey val id: String, // "BUD-101"
+    val userId: String,
+    val category: String, // "Overall", "Food & Dining", "Groceries", "Loan EMI", "Transportation", "Utilities", "Shopping", "Entertainment"
+    val monthlyLimit: Double,
+    val month: String, // "2026-09"
+    val alertThresholdPercent: Double = 80.0,
+    val createdAt: Long = System.currentTimeMillis()
+)
+

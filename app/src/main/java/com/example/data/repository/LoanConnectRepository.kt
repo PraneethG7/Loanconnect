@@ -296,6 +296,27 @@ class LoanConnectRepository(private val dao: LoanConnectDao) {
             )
         )
 
+        // Automatically log real-time expense for personal finance tracking
+        dao.insertExpense(
+            ExpenseEntity(
+                id = "EXP-${System.currentTimeMillis() % 100000}",
+                userId = loan.borrowerId,
+                title = "Loan Repayment (${loan.financierName})",
+                amount = amount,
+                category = "Loan EMI",
+                paymentMethod = when (method) {
+                    PaymentMethod.UPI -> "Google Pay / UPI"
+                    PaymentMethod.BANK_TRANSFER -> "Bank Transfer"
+                    PaymentMethod.CARD -> "Debit Card"
+                    PaymentMethod.NET_BANKING -> "Net Banking"
+                    PaymentMethod.CASH -> "Cash"
+                    PaymentMethod.AUTO_PAY -> "Auto-Debit"
+                },
+                date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
+                notes = "Loan ${loan.id} installment paid via $method. $notes"
+            )
+        )
+
         // Send notifications
         dao.insertNotification(
             NotificationEntity(
@@ -464,5 +485,124 @@ class LoanConnectRepository(private val dao: LoanConnectDao) {
                 details = "Updated verification status of ${user.name} (${user.businessName}) to $status."
             )
         )
+    }
+
+    // --- Authentication & Account Management ---
+    suspend fun authenticateUser(emailOrPhone: String, password: String): UserEntity? {
+        val user = dao.getUserByEmailOrPhone(emailOrPhone) ?: return null
+        return if (user.password == password) user else null
+    }
+
+    suspend fun registerUser(user: UserEntity): UserEntity {
+        dao.insertUser(user)
+        dao.insertAuditLog(
+            AuditLogEntity(
+                id = "LOG-${System.currentTimeMillis()}",
+                userId = user.id,
+                userName = user.name,
+                action = "ACCOUNT_REGISTERED",
+                entityType = "USER",
+                entityId = user.id,
+                details = "Registered as ${user.role.name} with email ${user.email}."
+            )
+        )
+        return user
+    }
+
+    // --- Bank Accounts ---
+    fun getBankAccountsForUser(userId: String): Flow<List<BankAccountEntity>> =
+        dao.getBankAccountsForUser(userId)
+
+    suspend fun addBankAccount(bankAccount: BankAccountEntity) {
+        if (bankAccount.isPrimary) {
+            dao.clearPrimaryBankAccounts(bankAccount.userId)
+        }
+        dao.insertBankAccount(bankAccount)
+        dao.insertAuditLog(
+            AuditLogEntity(
+                id = "LOG-${System.currentTimeMillis()}",
+                userId = bankAccount.userId,
+                userName = bankAccount.accountHolderName,
+                action = "BANK_ACCOUNT_CONNECTED",
+                entityType = "BANK_ACCOUNT",
+                entityId = bankAccount.id,
+                details = "Connected ${bankAccount.bankName} (Ending in ${bankAccount.accountNumberLast4})."
+            )
+        )
+    }
+
+    suspend fun deleteBankAccount(bankAccount: BankAccountEntity) {
+        dao.deleteBankAccount(bankAccount)
+    }
+
+    suspend fun setPrimaryBankAccount(userId: String, bankAccountId: String) {
+        dao.clearPrimaryBankAccounts(userId)
+        dao.setPrimaryBankAccount(userId, bankAccountId)
+    }
+
+    // --- Real-time Expense Tracking ---
+    fun getExpensesForUser(userId: String): Flow<List<ExpenseEntity>> =
+        dao.getExpensesForUser(userId)
+
+    suspend fun addExpense(
+        userId: String,
+        title: String,
+        amount: Double,
+        category: String,
+        paymentMethod: String,
+        bankAccountId: String? = null,
+        date: String,
+        notes: String = "",
+        isRecurring: Boolean = false
+    ): ExpenseEntity {
+        val expense = ExpenseEntity(
+            id = "EXP-${System.currentTimeMillis() % 100000}",
+            userId = userId,
+            title = title,
+            amount = amount,
+            category = category,
+            paymentMethod = paymentMethod,
+            bankAccountId = bankAccountId,
+            date = date,
+            notes = notes,
+            isRecurring = isRecurring
+        )
+        dao.insertExpense(expense)
+        return expense
+    }
+
+    suspend fun updateExpense(expense: ExpenseEntity) {
+        dao.updateExpense(expense)
+    }
+
+    suspend fun deleteExpense(expense: ExpenseEntity) {
+        dao.deleteExpense(expense)
+    }
+
+    // --- Budget Visualization ---
+    fun getBudgetsForUser(userId: String): Flow<List<BudgetEntity>> =
+        dao.getBudgetsForUser(userId)
+
+    suspend fun setBudget(
+        userId: String,
+        category: String,
+        monthlyLimit: Double,
+        month: String,
+        alertThresholdPercent: Double = 80.0
+    ): BudgetEntity {
+        val budget = BudgetEntity(
+            id = "BUD-${userId}_${category.replace(" ", "_")}_$month",
+            userId = userId,
+            category = category,
+            monthlyLimit = monthlyLimit,
+            month = month,
+            alertThresholdPercent = alertThresholdPercent
+        )
+        dao.insertBudget(budget)
+        return budget
+    }
+
+    suspend fun deleteBudget(budget: BudgetEntity) {
+        dao.deleteBudget(budget)
     }
 }

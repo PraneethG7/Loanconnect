@@ -19,6 +19,7 @@ data class ChatMessage(
     val actionSuggested: String? = null
 )
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class LoanConnectViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = AppDatabase.getDatabase(application)
@@ -29,12 +30,32 @@ class LoanConnectViewModel(application: Application) : AndroidViewModel(applicat
     private val _currentUserId = MutableStateFlow("user_b1") // Starts as Priya Sharma (Borrower)
     val currentUserId: StateFlow<String> = _currentUserId.asStateFlow()
 
+    private val _isLoggedIn = MutableStateFlow(true)
+    val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
+
+    private val _authError = MutableStateFlow<String?>(null)
+    val authError: StateFlow<String?> = _authError.asStateFlow()
+
     val allUsers: StateFlow<List<UserEntity>> = repo.getAllUsers()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val currentUser: StateFlow<UserEntity?> = _currentUserId
         .flatMapLatest { id -> repo.getUserById(id) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    // Linked Bank Accounts
+    val linkedBankAccounts: StateFlow<List<BankAccountEntity>> = _currentUserId
+        .flatMapLatest { id -> repo.getBankAccountsForUser(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Real-time Expense Tracking & Budget Visualization
+    val userExpenses: StateFlow<List<ExpenseEntity>> = _currentUserId
+        .flatMapLatest { id -> repo.getExpensesForUser(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val userBudgets: StateFlow<List<BudgetEntity>> = _currentUserId
+        .flatMapLatest { id -> repo.getBudgetsForUser(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Disclosed Financiers for marketplace
     val disclosedFinanciers: StateFlow<List<UserEntity>> = repo.getDisclosedFinanciers()
@@ -169,6 +190,175 @@ class LoanConnectViewModel(application: Application) : AndroidViewModel(applicat
 
     fun switchUser(userId: String) {
         _currentUserId.value = userId
+        _isLoggedIn.value = true
+        _authError.value = null
+    }
+
+    fun login(emailOrPhone: String, pass: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            _authError.value = null
+            val user = repo.authenticateUser(emailOrPhone.trim(), pass.trim())
+            if (user != null) {
+                _currentUserId.value = user.id
+                _isLoggedIn.value = true
+                onResult(true)
+            } else {
+                _authError.value = "Invalid email/phone or password. (Demo: password123)"
+                onResult(false)
+            }
+        }
+    }
+
+    fun register(
+        name: String,
+        email: String,
+        phone: String,
+        pass: String,
+        role: UserRole,
+        businessName: String = "",
+        address: String = "",
+        serviceArea: String = "All Regions",
+        minAmount: Double = 5000.0,
+        maxAmount: Double = 500000.0,
+        rate: Double = 10.0,
+        interestType: InterestType = InterestType.MONTHLY,
+        onComplete: () -> Unit
+    ) {
+        viewModelScope.launch {
+            val prefix = when (role) {
+                UserRole.FINANCIER -> "user_f_"
+                UserRole.BORROWER -> "user_b_"
+                UserRole.ADMIN -> "user_a_"
+            }
+            val newUserId = "$prefix${System.currentTimeMillis() % 100000}"
+            val newUser = UserEntity(
+                id = newUserId,
+                name = name.trim(),
+                email = email.trim(),
+                phone = phone.trim(),
+                password = pass.trim(),
+                role = role,
+                businessName = businessName.trim(),
+                address = address.trim(),
+                serviceArea = serviceArea.trim(),
+                minLoanAmount = minAmount,
+                maxLoanAmount = maxAmount,
+                standardInterestRate = rate,
+                standardInterestType = interestType,
+                verificationStatus = if (role == UserRole.FINANCIER) VerificationStatus.PENDING else VerificationStatus.VERIFIED
+            )
+            repo.registerUser(newUser)
+            _currentUserId.value = newUserId
+            _isLoggedIn.value = true
+            _authError.value = null
+            onComplete()
+        }
+    }
+
+    fun logout() {
+        _isLoggedIn.value = false
+        _authError.value = null
+    }
+
+    // --- Bank Account Management ---
+    fun connectBankAccount(
+        bankName: String,
+        accountNumber: String,
+        ifscCode: String,
+        accountHolderName: String,
+        accountType: String = "Savings",
+        upiId: String = "",
+        isPrimary: Boolean = true
+    ) {
+        val user = currentUser.value ?: return
+        viewModelScope.launch {
+            val last4 = if (accountNumber.length >= 4) accountNumber.takeLast(4) else accountNumber
+            val bankAccount = BankAccountEntity(
+                id = "BANK-${System.currentTimeMillis() % 100000}",
+                userId = user.id,
+                bankName = bankName,
+                accountNumber = accountNumber,
+                accountNumberLast4 = last4,
+                ifscCode = ifscCode.uppercase().trim(),
+                accountHolderName = accountHolderName.ifEmpty { user.name },
+                accountType = accountType,
+                isVerified = true,
+                isPrimary = isPrimary,
+                upiId = upiId.ifEmpty { "${user.phone.filter { it.isDigit() }}@upi" }
+            )
+            repo.addBankAccount(bankAccount)
+        }
+    }
+
+    fun removeBankAccount(bankAccount: BankAccountEntity) {
+        viewModelScope.launch {
+            repo.deleteBankAccount(bankAccount)
+        }
+    }
+
+    fun setPrimaryBankAccount(bankAccountId: String) {
+        val user = currentUser.value ?: return
+        viewModelScope.launch {
+            repo.setPrimaryBankAccount(user.id, bankAccountId)
+        }
+    }
+
+    // --- Expense Management ---
+    fun addExpense(
+        title: String,
+        amount: Double,
+        category: String,
+        paymentMethod: String,
+        bankAccountId: String? = null,
+        date: String,
+        notes: String = "",
+        isRecurring: Boolean = false
+    ) {
+        val user = currentUser.value ?: return
+        viewModelScope.launch {
+            repo.addExpense(
+                userId = user.id,
+                title = title.trim(),
+                amount = amount,
+                category = category,
+                paymentMethod = paymentMethod,
+                bankAccountId = bankAccountId,
+                date = date,
+                notes = notes.trim(),
+                isRecurring = isRecurring
+            )
+        }
+    }
+
+    fun deleteExpense(expense: ExpenseEntity) {
+        viewModelScope.launch {
+            repo.deleteExpense(expense)
+        }
+    }
+
+    // --- Budget Management ---
+    fun setBudget(
+        category: String,
+        monthlyLimit: Double,
+        month: String,
+        alertThresholdPercent: Double = 80.0
+    ) {
+        val user = currentUser.value ?: return
+        viewModelScope.launch {
+            repo.setBudget(
+                userId = user.id,
+                category = category,
+                monthlyLimit = monthlyLimit,
+                month = month,
+                alertThresholdPercent = alertThresholdPercent
+            )
+        }
+    }
+
+    fun deleteBudget(budget: BudgetEntity) {
+        viewModelScope.launch {
+            repo.deleteBudget(budget)
+        }
     }
 
     fun setLanguage(lang: String) {

@@ -1,5 +1,6 @@
 package com.example.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -24,9 +25,13 @@ import com.example.ui.components.MakePaymentDialog
 import com.example.ui.components.PaymentReceiptDialog
 import com.example.ui.screens.admin.AdminDashboardScreen
 import com.example.ui.screens.ai.LoanConnectAiScreen
+import com.example.ui.screens.auth.AuthScreen
+import com.example.ui.screens.bank.ConnectBankDialog
 import com.example.ui.screens.borrower.BorrowerDashboardScreen
 import com.example.ui.screens.borrower.BorrowerLoansScreen
 import com.example.ui.screens.borrower.FindFinancierScreen
+import com.example.ui.screens.personal.BudgetVisualizationScreen
+import com.example.ui.screens.personal.ExpenseTrackerScreen
 import com.example.ui.screens.common.HelpAndSupportScreen
 import com.example.ui.screens.common.LoanCalculatorScreen
 import com.example.ui.screens.common.PaymentCalendarScreen
@@ -41,6 +46,8 @@ import com.example.ui.viewmodel.LoanConnectViewModel
 
 enum class NavigationTab {
     DASHBOARD,
+    EXPENSES,
+    BUDGET,
     FIND_FINANCIER,
     MY_LOANS,
     COLLECTIONS,
@@ -67,9 +74,16 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
     val userNotifications by viewModel.userNotifications.collectAsStateWithLifecycle()
     val disclosedFinanciers by viewModel.disclosedFinanciers.collectAsStateWithLifecycle()
 
+    val userExpenses by viewModel.userExpenses.collectAsStateWithLifecycle()
+    val userBudgets by viewModel.userBudgets.collectAsStateWithLifecycle()
+
     val aiMessages by viewModel.aiMessages.collectAsStateWithLifecycle()
     val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
     val isAiLoading by viewModel.isAiLoading.collectAsStateWithLifecycle()
+
+    val isLoggedIn by viewModel.isLoggedIn.collectAsStateWithLifecycle()
+    val authError by viewModel.authError.collectAsStateWithLifecycle()
+    val linkedBankAccounts by viewModel.linkedBankAccounts.collectAsStateWithLifecycle()
 
     val activeReceipt by viewModel.activeReceipt.collectAsStateWithLifecycle()
 
@@ -81,56 +95,80 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
     var isPaymentOffline by remember { mutableStateOf(false) }
     var showUserSwitcher by remember { mutableStateOf(false) }
     var showNotificationsModal by remember { mutableStateOf(false) }
+    var showConnectBankModal by remember { mutableStateOf(false) }
 
     val unreadNotifs = userNotifications.count { !it.isRead }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = LoanPrimary,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("LC", fontWeight = FontWeight.Black, color = Color.White, fontSize = 14.sp)
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text("LoanConnect", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                            currentUser?.let { user ->
-                                Text(
-                                    text = "${user.name} • ${user.role.name}",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                },
-                actions = {
-                    // Profile Switcher (Financier / Borrower / Admin)
-                    IconButton(
-                        onClick = { showUserSwitcher = true },
-                        modifier = Modifier.testTag("switch_user_button")
-                    ) {
-                        Icon(Icons.Default.AccountCircle, contentDescription = "Switch Account")
-                    }
+    BackHandler(enabled = isLoggedIn && currentTab != NavigationTab.DASHBOARD) {
+        currentTab = NavigationTab.DASHBOARD
+    }
 
-                    // Notifications
-                    IconButton(onClick = { showNotificationsModal = true }) {
-                        BadgedBox(badge = {
-                            if (unreadNotifs > 0) {
-                                Badge { Text(unreadNotifs.toString()) }
+    if (!isLoggedIn) {
+        AuthScreen(
+            authError = authError,
+            onLogin = { emailOrPhone, pass ->
+                viewModel.login(emailOrPhone, pass) {}
+            },
+            onRegister = { name, email, phone, pass, role, bizName, addr, area, minAmt, maxAmt, rate, iType ->
+                viewModel.register(name, email, phone, pass, role, bizName, addr, area, minAmt, maxAmt, rate, iType) {}
+            },
+            onQuickDemoLogin = { userId ->
+                viewModel.switchUser(userId)
+            }
+        )
+    } else {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = LoanPrimary,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("LC", fontWeight = FontWeight.Black, color = Color.White, fontSize = 14.sp)
+                                }
                             }
-                        }) {
-                            Icon(Icons.Default.Notifications, contentDescription = "Notifications")
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text("LoanConnect", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                currentUser?.let { user ->
+                                    Text(
+                                        text = "${user.name} • ${user.role.name}",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
-                    }
-                },
+                    },
+                    actions = {
+                        // Connect Bank Account
+                        IconButton(onClick = { showConnectBankModal = true }) {
+                            Icon(Icons.Default.AccountBalance, contentDescription = "Connect Bank")
+                        }
+
+                        // Profile Switcher (Financier / Borrower / Admin)
+                        IconButton(
+                            onClick = { showUserSwitcher = true },
+                            modifier = Modifier.testTag("switch_user_button")
+                        ) {
+                            Icon(Icons.Default.AccountCircle, contentDescription = "Switch Account")
+                        }
+
+                        // Notifications
+                        IconButton(onClick = { showNotificationsModal = true }) {
+                            BadgedBox(badge = {
+                                if (unreadNotifs > 0) {
+                                    Badge { Text(unreadNotifs.toString()) }
+                                }
+                            }) {
+                                Icon(Icons.Default.Notifications, contentDescription = "Notifications")
+                            }
+                        }
+                    },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -147,32 +185,32 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
                             NavigationBarItem(
                                 selected = currentTab == NavigationTab.DASHBOARD,
                                 onClick = { currentTab = NavigationTab.DASHBOARD },
-                                icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
+                                icon = { Icon(Icons.Default.Dashboard, contentDescription = "Home") },
                                 label = { Text("Home") }
                             )
                             NavigationBarItem(
-                                selected = currentTab == NavigationTab.FIND_FINANCIER,
-                                onClick = { currentTab = NavigationTab.FIND_FINANCIER },
-                                icon = { Icon(Icons.Default.Search, contentDescription = "Market") },
-                                label = { Text("Market") }
+                                selected = currentTab == NavigationTab.EXPENSES,
+                                onClick = { currentTab = NavigationTab.EXPENSES },
+                                icon = { Icon(Icons.Default.ReceiptLong, contentDescription = "Expenses") },
+                                label = { Text("Expenses") }
                             )
                             NavigationBarItem(
-                                selected = currentTab == NavigationTab.MY_LOANS,
+                                selected = currentTab == NavigationTab.BUDGET,
+                                onClick = { currentTab = NavigationTab.BUDGET },
+                                icon = { Icon(Icons.Default.PieChart, contentDescription = "Budget") },
+                                label = { Text("Budget") }
+                            )
+                            NavigationBarItem(
+                                selected = currentTab == NavigationTab.MY_LOANS || currentTab == NavigationTab.FIND_FINANCIER,
                                 onClick = { currentTab = NavigationTab.MY_LOANS },
-                                icon = { Icon(Icons.Default.FormatListBulleted, contentDescription = "Loans") },
-                                label = { Text("Loans") }
+                                icon = { Icon(Icons.Default.AccountBalance, contentDescription = "Loans") },
+                                label = { Text("Loans & Pay") }
                             )
                             NavigationBarItem(
                                 selected = currentTab == NavigationTab.AI_ASSISTANT,
                                 onClick = { currentTab = NavigationTab.AI_ASSISTANT },
                                 icon = { Icon(Icons.Default.SmartToy, contentDescription = "AI") },
                                 label = { Text("Ask AI") }
-                            )
-                            NavigationBarItem(
-                                selected = currentTab == NavigationTab.SUPPORT || currentTab == NavigationTab.CALCULATOR || currentTab == NavigationTab.CALENDAR,
-                                onClick = { currentTab = NavigationTab.SUPPORT },
-                                icon = { Icon(Icons.Default.HelpCenter, contentDescription = "More") },
-                                label = { Text("More") }
                             )
                         }
                         UserRole.FINANCIER -> {
@@ -247,12 +285,16 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
                                 loans = userLoans,
                                 payments = userPayments,
                                 offers = userOffers,
+                                expenses = userExpenses,
+                                budgets = userBudgets,
                                 onNavigateToFindFinancier = { currentTab = NavigationTab.FIND_FINANCIER },
                                 onNavigateToMyLoans = { currentTab = NavigationTab.MY_LOANS },
                                 onNavigateToAi = { currentTab = NavigationTab.AI_ASSISTANT },
                                 onNavigateToSupport = { currentTab = NavigationTab.SUPPORT },
                                 onNavigateToCalendar = { currentTab = NavigationTab.CALENDAR },
                                 onNavigateToCalculator = { currentTab = NavigationTab.CALCULATOR },
+                                onNavigateToExpenses = { currentTab = NavigationTab.EXPENSES },
+                                onNavigateToBudget = { currentTab = NavigationTab.BUDGET },
                                 onPayLoan = { loan ->
                                     isPaymentOffline = false
                                     paymentLoanTarget = loan
@@ -261,7 +303,25 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
                                 onToggleAutoPay = { loan, enable -> viewModel.toggleAutoPay(loan, enable) },
                                 onAcceptOffer = { offer -> viewModel.acceptOffer(offer) },
                                 onRejectOffer = { offer -> viewModel.rejectOffer(offer) },
-                                onViewReceipt = { payment -> viewModel.showReceipt(payment) }
+                                onViewReceipt = { payment -> viewModel.showReceipt(payment) },
+                                onConnectBank = { showConnectBankModal = true }
+                            )
+                            NavigationTab.EXPENSES -> ExpenseTrackerScreen(
+                                expenses = userExpenses,
+                                linkedBankAccounts = linkedBankAccounts,
+                                onAddExpense = { title, amt, cat, method, bId, date, notes ->
+                                    viewModel.addExpense(title, amt, cat, method, bId, date, notes)
+                                },
+                                onDeleteExpense = { exp -> viewModel.deleteExpense(exp) },
+                                onNavigateToBudget = { currentTab = NavigationTab.BUDGET },
+                                onConnectBank = { showConnectBankModal = true }
+                            )
+                            NavigationTab.BUDGET -> BudgetVisualizationScreen(
+                                budgets = userBudgets,
+                                expenses = userExpenses,
+                                onSetBudget = { cat, limit, month -> viewModel.setBudget(cat, limit, month) },
+                                onNavigateToExpenses = { currentTab = NavigationTab.EXPENSES },
+                                onAskAi = { currentTab = NavigationTab.AI_ASSISTANT }
                             )
                             NavigationTab.FIND_FINANCIER -> FindFinancierScreen(
                                 financiers = disclosedFinanciers,
@@ -298,12 +358,16 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
                                 loans = userLoans,
                                 payments = userPayments,
                                 offers = userOffers,
+                                expenses = userExpenses,
+                                budgets = userBudgets,
                                 onNavigateToFindFinancier = { currentTab = NavigationTab.FIND_FINANCIER },
                                 onNavigateToMyLoans = { currentTab = NavigationTab.MY_LOANS },
                                 onNavigateToAi = { currentTab = NavigationTab.AI_ASSISTANT },
                                 onNavigateToSupport = { currentTab = NavigationTab.SUPPORT },
                                 onNavigateToCalendar = { currentTab = NavigationTab.CALENDAR },
                                 onNavigateToCalculator = { currentTab = NavigationTab.CALCULATOR },
+                                onNavigateToExpenses = { currentTab = NavigationTab.EXPENSES },
+                                onNavigateToBudget = { currentTab = NavigationTab.BUDGET },
                                 onPayLoan = { loan ->
                                     isPaymentOffline = false
                                     paymentLoanTarget = loan
@@ -312,7 +376,8 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
                                 onToggleAutoPay = { loan, enable -> viewModel.toggleAutoPay(loan, enable) },
                                 onAcceptOffer = { offer -> viewModel.acceptOffer(offer) },
                                 onRejectOffer = { offer -> viewModel.rejectOffer(offer) },
-                                onViewReceipt = { payment -> viewModel.showReceipt(payment) }
+                                onViewReceipt = { payment -> viewModel.showReceipt(payment) },
+                                onConnectBank = { showConnectBankModal = true }
                             )
                         }
                     }
@@ -418,6 +483,7 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
     paymentLoanTarget?.let { loan ->
         MakePaymentDialog(
             loan = loan,
+            primaryBankAccount = linkedBankAccounts.firstOrNull { it.isPrimary } ?: linkedBankAccounts.firstOrNull(),
             isOfflineRecord = isPaymentOffline,
             onDismiss = { paymentLoanTarget = null },
             onConfirmPayment = { amount, method, notes ->
@@ -432,6 +498,23 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
         PaymentReceiptDialog(
             payment = receipt,
             onDismiss = { viewModel.clearActiveReceipt() }
+        )
+    }
+
+    // Connect Bank Dialog
+    if (showConnectBankModal) {
+        ConnectBankDialog(
+            currentBankAccounts = linkedBankAccounts,
+            onDismiss = { showConnectBankModal = false },
+            onConnectBank = { bName, accNum, ifsc, holder, type, upi, primary ->
+                viewModel.connectBankAccount(bName, accNum, ifsc, holder, type, upi, primary)
+            },
+            onDeleteBankAccount = { account ->
+                viewModel.removeBankAccount(account)
+            },
+            onSetPrimary = { accountId ->
+                viewModel.setPrimaryBankAccount(accountId)
+            }
         )
     }
 
@@ -516,6 +599,21 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
                             }
                         }
                     }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.logout()
+                            showUserSwitcher = false
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Log Out of Account")
+                    }
                 }
             }
         }
@@ -573,5 +671,6 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
                 }
             }
         }
+    }
     }
 }

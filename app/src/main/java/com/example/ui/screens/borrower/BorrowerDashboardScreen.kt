@@ -32,18 +32,23 @@ fun BorrowerDashboardScreen(
     loans: List<LoanEntity>,
     payments: List<PaymentEntity>,
     offers: List<LoanOfferEntity>,
+    expenses: List<ExpenseEntity> = emptyList(),
+    budgets: List<BudgetEntity> = emptyList(),
     onNavigateToFindFinancier: () -> Unit,
     onNavigateToMyLoans: () -> Unit,
     onNavigateToAi: () -> Unit,
     onNavigateToSupport: () -> Unit,
     onNavigateToCalendar: () -> Unit,
     onNavigateToCalculator: () -> Unit,
+    onNavigateToExpenses: () -> Unit = {},
+    onNavigateToBudget: () -> Unit = {},
     onPayLoan: (LoanEntity) -> Unit,
     onEarlySettle: (LoanEntity) -> Unit,
     onToggleAutoPay: (LoanEntity, Boolean) -> Unit,
     onAcceptOffer: (LoanOfferEntity) -> Unit,
     onRejectOffer: (LoanOfferEntity) -> Unit,
-    onViewReceipt: (PaymentEntity) -> Unit
+    onViewReceipt: (PaymentEntity) -> Unit,
+    onConnectBank: () -> Unit = {}
 ) {
     var showQrModal by remember { mutableStateOf(false) }
 
@@ -53,6 +58,10 @@ fun BorrowerDashboardScreen(
     val totalPaid = loans.sumOf { it.totalPaid }
     val activeLoans = loans.filter { it.status == LoanStatus.ACTIVE || it.status == LoanStatus.OVERDUE }
     val nextLoan = activeLoans.minByOrNull { it.nextDueDate }
+
+    val monthlyExpenseTotal = expenses.sumOf { it.amount }
+    val overallBudgetLimit = budgets.find { it.category == "Overall" }?.monthlyLimit ?: 40000.0
+    val budgetPct = if (overallBudgetLimit > 0) (monthlyExpenseTotal / overallBudgetLimit * 100).coerceAtMost(100.0) else 0.0
 
     LazyColumn(
         modifier = Modifier
@@ -170,6 +179,138 @@ fun BorrowerDashboardScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // Real-Time Personal Finances & Budget Meter
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(LoanPrimary.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.TrendingDown, contentDescription = null, tint = LoanPrimary, modifier = Modifier.size(20.dp))
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text("Personal Expense & Budget", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("Real-time spending tracker", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+
+                        FilledTonalButton(
+                            onClick = onNavigateToBudget,
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.PieChart, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Budgets", fontSize = 11.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        Column {
+                            Text("September Expenses", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(formatCurrency(monthlyExpenseTotal), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Budget Limit", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(formatCurrency(overallBudgetLimit), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    LinearProgressIndicator(
+                        progress = { (budgetPct / 100.0).toFloat() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = if (budgetPct >= 90) OverdueRed else if (budgetPct >= 75) WarningAmber else LoanPrimary
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onNavigateToExpenses,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.ReceiptLong, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Track Expenses", fontSize = 12.sp)
+                        }
+
+                        Button(
+                            onClick = onNavigateToBudget,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                        ) {
+                            Icon(Icons.Default.ShowChart, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Budget Charts", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Connected Bank & Direct Pay Banner
+        item {
+            Card(
+                onClick = onConnectBank,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(LoanPrimary.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.AccountBalance, contentDescription = null, tint = LoanPrimary)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Connect Bank & Direct Pay", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("Link your bank account for 1-tap Google Pay repayments", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }

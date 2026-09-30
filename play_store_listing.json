@@ -1,0 +1,79 @@
+{
+  "listing": {
+    "title": "LoanConnect: Loan Manager",
+    "title_length": 25,
+    "short_description": "Manage loans, repayments, collections, EMI schedules, and compare loan terms.",
+    "short_description_length": 77,
+    "full_description": "LoanConnect is a comprehensive financial loan management and repayment tracking platform connecting financiers, borrowers, and administrators with transparent terms and real-time tracking.\n\nWhether you are an individual financier managing customer credit portfolios or a borrower tracking monthly installments, LoanConnect provides complete transparency into principal, interest, fees, and repayment schedules.\n\nKEY FEATURES:\n\n• For Borrowers:\n- Financier Marketplace: Browse verified financiers and compare publicly disclosed interest rates, tenures, and fees side by side.\n- Request Money: Submit structured loan requests specifying amount, purpose, and preferred repayment tenure.\n- Complete Financial Transparency: Inspect itemized breakdowns for every loan including Original Principal, Interest, Processing Fees, Total Payable, Total Paid, and Outstanding Balance.\n- Multiple Repayment Channels: Track and record repayments via UPI, Bank Transfer, Net Banking, Debit/Credit Card, or offline receipts.\n- Auto Pay Management: Set up and monitor scheduled recurring installment mandates.\n- Loan Statements: Generate and export comprehensive loan account statements.\n- Early Settlement Calculator: View remaining balance payoff figures with zero hidden charges.\n\n• For Financiers:\n- Portfolio Overview: Real-time tracking of Total Capital Lent, Principal Collected, Interest Yield, Platform Fees, and Net Earnings.\n- Smart Collections Roster: Daily categorized collection tracking for Paid, Due Today, Overdue, and Upcoming installments.\n- Loan Requests & Offers: Review incoming borrower applications, calculate monthly installments, and dispatch formal loan offers.\n- Digital Agreements: Generate clear digital loan terms with timestamps upon borrower acceptance.\n- Offline Cash Collection: Record and generate receipts for in-person cash payments.\n- Instant Payment Links & QR: Generate shareable payment links and UPI QR codes for rapid borrower settlement.\n- Reports & Analytics: Visual capital velocity charts comparing disbursed funds against recovery yields with PDF, Excel, and CSV export options.\n\n• Dedicated Tools & Security:\n- Interactive Loan Calculator: Simulate interest rates (Monthly, Yearly, or Fixed) with live amortization schedules.\n- Payment Calendar: Visual color-coded calendar highlighting Paid, Upcoming, and Overdue installments.\n- Multilingual AI Assistant: Ask questions in English, Hindi, Tamil, Telugu, Kannada, Malayalam, Bengali, Marathi, or Gujarati with voice input support.\n- Safety & Fraud Prevention: Real-time dispute reporting, user blocking, and grievance redressal tickets.\n\nREGULATORY PERSONAL LOAN DISCLOSURES:\n\n• Minimum Repayment Period: 61 days (3 months)\n• Maximum Repayment Period: 36 months (3 years)\n• Annual Percentage Rate (APR): 9.0% to 24.0% per annum\n• Processing Fees: 1.0% to 2.0% (one-time)\n• Technology Platform Fee: 0.5%\n• Zero Short-Term Payday Loans: In accordance with Google Play Financial Services Policy, LoanConnect does not provide or support loans requiring full repayment in 60 days or less.\n\nREPRESENTATIVE EXAMPLE OF TOTAL LOAN COST:\n• Principal Amount Borrowed: ₹50,000\n• Tenure: 12 Months\n• Interest Rate (APR): 12% per annum\n• Processing Fee (1%): ₹500\n• Platform Technology Fee: ₹250\n• Total Interest Payable: ₹6,000\n• Total Amount Payable: ₹56,750\n• Monthly Installment (EMI): ₹4,729\n\nAI & CONTENT DISCLOSURE:\nLoanConnect AI utilizes generative AI models to assist with calculations, loan explanations, and multilingual queries. AI responses are informational and should be verified against official loan agreements. Users can report inaccurate or inappropriate AI responses through in-app support.\n\nPRIVACY & DATA PROTECTION:\nLoanConnect maintains strict data isolation between accounts. Financial credentials, UPI PINs, and passwords are never stored.",
+    "full_description_length": 3724
+  },
+  "capability_inventory": [
+    {
+      "capability": "Multi-role account separation for Financiers, Borrowers, and Admin with isolated data access",
+      "evidence": "app/src/main/java/com/example/data/dao/LoanConnectDao.kt (getLoansForFinancier, getLoansForBorrower, getAllLoansForAdmin)"
+    },
+    {
+      "capability": "Comprehensive 10-point financial calculation breakdown (Principal, Interest, Fees, Total Payable, Total Paid, Remaining)",
+      "evidence": "app/src/main/java/com/example/ui/components/FinancialBreakdownCard.kt (FinancialBreakdownCard)"
+    },
+    {
+      "capability": "Financier marketplace with filters and side-by-side term comparison",
+      "evidence": "app/src/main/java/com/example/ui/screens/borrower/FindFinancierScreen.kt (FindFinancierScreen, ComparisonDialog)"
+    },
+    {
+      "capability": "Borrower loan requests and Financier loan offer creation with live EMI computation",
+      "evidence": "app/src/main/java/com/example/ui/screens/financier/LoanRequestsScreen.kt (LoanRequestsScreen, CreateOfferDialog)"
+    },
+    {
+      "capability": "Payment processing supporting UPI, Bank Transfer, Net Banking, Card, and offline Cash with digital receipts",
+      "evidence": "app/src/main/java/com/example/ui/components/MakePaymentDialog.kt, app/src/main/java/com/example/ui/components/PaymentReceiptDialog.kt"
+    },
+    {
+      "capability": "Smart Collection dashboard with daily collection targets, overdue categorization, and QR payment generation",
+      "evidence": "app/src/main/java/com/example/ui/screens/financier/SmartCollectionScreen.kt (SmartCollectionScreen, SimulatedQrCodeView)"
+    },
+    {
+      "capability": "Recurring Auto Pay mandate tracking and management",
+      "evidence": "app/src/main/java/com/example/data/model/Entities.kt (AutoPayMandateEntity), app/src/main/java/com/example/data/repository/LoanConnectRepository.kt (toggleAutoPay)"
+    },
+    {
+      "capability": "Interactive loan calculator with customizable interest types and amortization schedule",
+      "evidence": "app/src/main/java/com/example/ui/screens/common/LoanCalculatorScreen.kt (LoanCalculatorScreen)"
+    },
+    {
+      "capability": "Visual payment calendar with color-coded markers for paid, upcoming, and overdue installments",
+      "evidence": "app/src/main/java/com/example/ui/screens/common/PaymentCalendarScreen.kt (PaymentCalendarScreen)"
+    },
+    {
+      "capability": "Portfolio analytics with capital velocity chart and PDF/Excel/CSV statement export simulation",
+      "evidence": "app/src/main/java/com/example/ui/screens/financier/FinancierReportsScreen.kt (FinancierReportsScreen)"
+    },
+    {
+      "capability": "Multilingual AI financial assistant supporting 9 Indian languages with voice input simulation",
+      "evidence": "app/src/main/java/com/example/data/ai/LoanConnectAiService.kt, app/src/main/java/com/example/ui/screens/ai/LoanConnectAiScreen.kt"
+    },
+    {
+      "capability": "Platform admin oversight with financier KYC verification, audit trail, and grievance tickets",
+      "evidence": "app/src/main/java/com/example/ui/screens/admin/AdminDashboardScreen.kt (AdminDashboardScreen), app/src/main/java/com/example/ui/screens/common/HelpAndSupportScreen.kt"
+    },
+    {
+      "capability": "In-app regulatory loan disclosures dialog complying with Google Play Personal Loans policies",
+      "evidence": "app/src/main/java/com/example/ui/screens/common/HelpAndSupportScreen.kt (showDisclosuresDialog)"
+    }
+  ],
+  "disclosures_applied": [
+    {
+      "category": "Personal loan origination",
+      "disclosure_text": "Minimum repayment period 61 days (3 months), maximum repayment period 36 months, APR 9.0% to 24.0% p.a., processing fees 1%-2%, platform fee 0.5%, zero short-term payday loans, representative cost example for ₹50,000 loan over 12 months, and privacy policy reference."
+    },
+    {
+      "category": "Generative AI features",
+      "disclosure_text": "LoanConnect AI utilizes generative AI to answer queries and explain loan terms. Outputs are informational and users can report any issues through in-app support."
+    },
+    {
+      "category": "User-generated content or social features",
+      "disclosure_text": "In-app user reporting and account blocking mechanisms for both borrowers and financiers to report suspicious activity or policy violations."
+    }
+  ],
+  "omitted_for_lack_of_evidence": []
+}
