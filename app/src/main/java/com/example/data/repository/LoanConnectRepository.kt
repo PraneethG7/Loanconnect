@@ -12,6 +12,7 @@ class LoanConnectRepository(private val dao: LoanConnectDao) {
     fun getAllUsers(): Flow<List<UserEntity>> = dao.getAllUsers()
     fun getUserById(userId: String): Flow<UserEntity?> = dao.getUserById(userId)
     suspend fun getUserByIdSync(userId: String): UserEntity? = dao.getUserByIdSync(userId)
+    suspend fun getUserByEmail(email: String): UserEntity? = dao.getUserByEmailOrPhone(email)
     fun getDisclosedFinanciers(): Flow<List<UserEntity>> = dao.getDisclosedFinanciers()
 
     suspend fun insertUser(user: UserEntity) = dao.insertUser(user)
@@ -27,6 +28,7 @@ class LoanConnectRepository(private val dao: LoanConnectDao) {
     fun getAllLoansForAdmin(): Flow<List<LoanEntity>> = dao.getAllLoansForAdmin()
 
     fun getLoanById(loanId: String): Flow<LoanEntity?> = dao.getLoanById(loanId)
+    suspend fun getLoanByIdSync(loanId: String): LoanEntity? = dao.getLoanByIdSync(loanId)
 
     // --- Requests ---
     fun getRequestsForFinancier(financierId: String): Flow<List<LoanRequestEntity>> =
@@ -215,6 +217,144 @@ class LoanConnectRepository(private val dao: LoanConnectDao) {
 
     suspend fun rejectOffer(offer: LoanOfferEntity) {
         dao.updateOffer(offer.copy(status = OfferStatus.REJECTED))
+    }
+
+    suspend fun applyForLoan(
+        borrowerId: String,
+        borrowerName: String,
+        requestedAmount: Double,
+        durationMonths: Int,
+        purpose: String,
+        financierId: String? = null,
+        financierName: String? = null,
+        interestRate: Double = 10.0,
+        paymentFrequency: String = "Monthly"
+    ): LoanEntity {
+        val loanId = "LOAN-${(100000..999999).random()}"
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val cal = Calendar.getInstance()
+        val startDate = sdf.format(cal.time)
+        cal.add(Calendar.MONTH, durationMonths)
+        val dueDate = sdf.format(cal.time)
+        cal.time = Date()
+        cal.add(Calendar.MONTH, 1)
+        val nextDueDate = sdf.format(cal.time)
+
+        val fId = financierId ?: "user_f1"
+        val fName = financierName ?: "Ramesh Financial Services"
+
+        val totalInterest = requestedAmount * (interestRate / 100.0) * (durationMonths / 12.0)
+        val processingFee = (requestedAmount * 0.01).coerceAtLeast(300.0).coerceAtMost(2500.0)
+        val platformFee = 150.0
+        val totalPayable = requestedAmount + totalInterest + processingFee + platformFee
+        val installmentAmount = (totalPayable / durationMonths).let { Math.round(it * 100.0) / 100.0 }
+
+        val loan = LoanEntity(
+            id = loanId,
+            financierId = fId,
+            borrowerId = borrowerId,
+            financierName = fName,
+            borrowerName = borrowerName,
+            principalAmount = requestedAmount,
+            interestRate = interestRate,
+            interestType = InterestType.MONTHLY,
+            interestAmount = totalInterest,
+            processingFee = processingFee,
+            platformFee = platformFee,
+            totalPayable = totalPayable,
+            totalPaid = 0.0,
+            principalPaid = 0.0,
+            interestPaid = 0.0,
+            startDate = startDate,
+            dueDate = dueDate,
+            nextDueDate = nextDueDate,
+            nextInstallmentAmount = installmentAmount,
+            paymentFrequency = paymentFrequency,
+            durationMonths = durationMonths,
+            status = LoanStatus.ACTIVE,
+            disbursementTxId = "DISB-${(100000..999999).random()}",
+            agreementAcceptedAt = System.currentTimeMillis(),
+            isAutoPayEnabled = false,
+            purpose = purpose,
+            createdAt = System.currentTimeMillis()
+        )
+        dao.insertLoan(loan)
+
+        // Add corresponding request audit trail
+        val reqId = "REQ-${System.currentTimeMillis() % 100000}"
+        val loanReq = LoanRequestEntity(
+            id = reqId,
+            borrowerId = borrowerId,
+            financierId = fId,
+            borrowerName = borrowerName,
+            financierName = fName,
+            requestedAmount = requestedAmount,
+            purpose = purpose,
+            durationMonths = durationMonths,
+            paymentFrequency = paymentFrequency,
+            message = "Loan applied directly for $purpose",
+            status = RequestStatus.ACCEPTED,
+            createdAt = System.currentTimeMillis()
+        )
+        dao.insertRequest(loanReq)
+
+        // Create initial installment schedules
+        val scheduleList = mutableListOf<PaymentScheduleEntity>()
+        val schedCal = Calendar.getInstance()
+        val monthlyPrincipal = requestedAmount / durationMonths
+        val monthlyInterest = totalInterest / durationMonths
+        for (i in 1..durationMonths) {
+            schedCal.time = Date()
+            schedCal.add(Calendar.MONTH, i)
+            val instDueDate = sdf.format(schedCal.time)
+            scheduleList.add(
+                PaymentScheduleEntity(
+                    id = "SCH-${loanId.removePrefix("LOAN-")}-$i",
+                    loanId = loanId,
+                    installmentNumber = i,
+                    dueAmount = installmentAmount,
+                    principalComponent = monthlyPrincipal,
+                    interestComponent = monthlyInterest,
+                    dueDate = instDueDate,
+                    status = ScheduleStatus.PENDING
+                )
+            )
+        }
+        dao.insertSchedules(scheduleList)
+
+        dao.insertNotification(
+            NotificationEntity(
+                id = "NOTIF-${System.currentTimeMillis()}",
+                userId = borrowerId,
+                title = "Loan Application Approved & Disbursed!",
+                message = "Your loan of ₹${String.format("%,.0f", requestedAmount)} for '$purpose' has been active with ID $loanId.",
+                type = "DISBURSEMENT"
+            )
+        )
+
+        dao.insertNotification(
+            NotificationEntity(
+                id = "NOTIF-${System.currentTimeMillis() + 1}",
+                userId = fId,
+                title = "New Loan Disbursed",
+                message = "$borrowerName applied and disbursed ₹${String.format("%,.0f", requestedAmount)} for '$purpose'.",
+                type = "DISBURSEMENT"
+            )
+        )
+
+        dao.insertAuditLog(
+            AuditLogEntity(
+                id = "LOG-${System.currentTimeMillis()}",
+                userId = borrowerId,
+                userName = borrowerName,
+                action = "LOAN_APPLIED",
+                entityType = "LOAN",
+                entityId = loanId,
+                details = "Applied for ₹$requestedAmount ($durationMonths mo) for $purpose with $fName."
+            )
+        )
+
+        return loan
     }
 
     // --- Payments ---

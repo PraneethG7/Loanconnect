@@ -42,6 +42,7 @@ fun BorrowerDashboardScreen(
     onNavigateToCalculator: () -> Unit,
     onNavigateToExpenses: () -> Unit = {},
     onNavigateToBudget: () -> Unit = {},
+    onNavigateToApplyForLoan: () -> Unit = {},
     onPayLoan: (LoanEntity) -> Unit,
     onEarlySettle: (LoanEntity) -> Unit,
     onToggleAutoPay: (LoanEntity, Boolean) -> Unit,
@@ -178,6 +179,62 @@ fun BorrowerDashboardScreen(
                                 )
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        // Apply for Loan Fast CTA Card
+        item {
+            Card(
+                onClick = onNavigateToApplyForLoan,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("borrower_apply_loan_cta"),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(CircleShape)
+                            .background(LoanPrimary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AddCard,
+                            contentDescription = "Apply for Loan",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Apply for Loan",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Input requested amount, tenure & purpose with instant direct disbursal",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = onNavigateToApplyForLoan,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text("Apply", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -484,10 +541,23 @@ fun BorrowerDashboardScreen(
                         Icon(Icons.Default.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(48.dp))
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("No Outstanding Debt!", fontWeight = FontWeight.Bold)
-                        Text("Explore disclosed financiers to request a new loan.", style = MaterialTheme.typography.bodySmall)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Button(onClick = onNavigateToFindFinancier) {
-                            Text("Find Financiers")
+                        Text("Apply for a new loan or explore disclosed marketplace financiers.", style = MaterialTheme.typography.bodySmall)
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = onNavigateToApplyForLoan,
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Apply for Loan")
+                            }
+                            OutlinedButton(
+                                onClick = onNavigateToFindFinancier,
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("Marketplace")
+                            }
                         }
                     }
                 }

@@ -26,7 +26,8 @@ fun BorrowerLoansScreen(
     loans: List<LoanEntity>,
     onPayLoan: (LoanEntity) -> Unit,
     onEarlySettle: (LoanEntity) -> Unit,
-    onToggleAutoPay: (LoanEntity, Boolean) -> Unit
+    onToggleAutoPay: (LoanEntity, Boolean) -> Unit,
+    onNavigateToApplyForLoan: () -> Unit = {}
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var statementLoan by remember { mutableStateOf<LoanEntity?>(null) }
@@ -47,7 +48,7 @@ fun BorrowerLoansScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "My Loans",
                     style = MaterialTheme.typography.headlineSmall,
@@ -58,6 +59,16 @@ fun BorrowerLoansScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = onNavigateToApplyForLoan,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.testTag("borrower_loans_apply_button")
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Apply", fontSize = 13.sp)
             }
         }
 
@@ -90,10 +101,23 @@ fun BorrowerLoansScreen(
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = if (selectedTab == 0) "No active loans found." else "No completed loans yet.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = if (selectedTab == 0) "No active loans found." else "No completed loans yet.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (selectedTab == 0) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = onNavigateToApplyForLoan,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Apply for Loan Now")
+                        }
+                    }
+                }
             }
         } else {
             LazyColumn(

@@ -14,19 +14,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import com.example.data.model.*
 import com.example.ui.components.MakePaymentDialog
 import com.example.ui.components.PaymentReceiptDialog
+import com.example.ui.components.formatCurrency
 import com.example.ui.screens.admin.AdminDashboardScreen
 import com.example.ui.screens.ai.LoanConnectAiScreen
 import com.example.ui.screens.auth.AuthScreen
 import com.example.ui.screens.bank.ConnectBankDialog
+import com.example.ui.screens.borrower.ApplyForLoanScreen
 import com.example.ui.screens.borrower.BorrowerDashboardScreen
 import com.example.ui.screens.borrower.BorrowerLoansScreen
 import com.example.ui.screens.borrower.FindFinancierScreen
@@ -49,6 +53,7 @@ enum class NavigationTab {
     EXPENSES,
     BUDGET,
     FIND_FINANCIER,
+    APPLY_FOR_LOAN,
     MY_LOANS,
     COLLECTIONS,
     REQUESTS,
@@ -77,6 +82,10 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
     val userExpenses by viewModel.userExpenses.collectAsStateWithLifecycle()
     val userBudgets by viewModel.userBudgets.collectAsStateWithLifecycle()
 
+    val allReports by viewModel.allReports.collectAsStateWithLifecycle()
+    val allAuditLogs by viewModel.allAuditLogs.collectAsStateWithLifecycle()
+    val adminTickets by viewModel.adminTickets.collectAsStateWithLifecycle()
+
     val aiMessages by viewModel.aiMessages.collectAsStateWithLifecycle()
     val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
     val isAiLoading by viewModel.isAiLoading.collectAsStateWithLifecycle()
@@ -87,6 +96,10 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
 
     val activeReceipt by viewModel.activeReceipt.collectAsStateWithLifecycle()
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
     // Navigation State
     var currentTab by remember { mutableStateOf(NavigationTab.DASHBOARD) }
 
@@ -96,6 +109,7 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
     var showUserSwitcher by remember { mutableStateOf(false) }
     var showNotificationsModal by remember { mutableStateOf(false) }
     var showConnectBankModal by remember { mutableStateOf(false) }
+    var newlyAppliedLoan by remember { mutableStateOf<LoanEntity?>(null) }
 
     val unreadNotifs = userNotifications.count { !it.isRead }
 
@@ -112,12 +126,17 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
             onRegister = { name, email, phone, pass, role, bizName, addr, area, minAmt, maxAmt, rate, iType ->
                 viewModel.register(name, email, phone, pass, role, bizName, addr, area, minAmt, maxAmt, rate, iType) {}
             },
-            onQuickDemoLogin = { userId ->
-                viewModel.switchUser(userId)
+            onGoogleSignIn = {
+                viewModel.signInWithGoogle(context, UserRole.BORROWER) { success, err ->
+                    if (!success && err != null) {
+                        scope.launch { snackbarHostState.showSnackbar(err) }
+                    }
+                }
             }
         )
     } else {
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
                     title = {
@@ -289,6 +308,7 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
                                 budgets = userBudgets,
                                 onNavigateToFindFinancier = { currentTab = NavigationTab.FIND_FINANCIER },
                                 onNavigateToMyLoans = { currentTab = NavigationTab.MY_LOANS },
+                                onNavigateToApplyForLoan = { currentTab = NavigationTab.APPLY_FOR_LOAN },
                                 onNavigateToAi = { currentTab = NavigationTab.AI_ASSISTANT },
                                 onNavigateToSupport = { currentTab = NavigationTab.SUPPORT },
                                 onNavigateToCalendar = { currentTab = NavigationTab.CALENDAR },
@@ -305,6 +325,23 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
                                 onRejectOffer = { offer -> viewModel.rejectOffer(offer) },
                                 onViewReceipt = { payment -> viewModel.showReceipt(payment) },
                                 onConnectBank = { showConnectBankModal = true }
+                            )
+                            NavigationTab.APPLY_FOR_LOAN -> ApplyForLoanScreen(
+                                borrower = user,
+                                financiers = disclosedFinanciers,
+                                onBack = { currentTab = NavigationTab.DASHBOARD },
+                                onSubmitApplication = { amount, duration, purpose, financier, rate ->
+                                    viewModel.applyForLoan(
+                                        requestedAmount = amount,
+                                        durationMonths = duration,
+                                        purpose = purpose,
+                                        financier = financier,
+                                        interestRate = rate
+                                    ) { loan ->
+                                        newlyAppliedLoan = loan
+                                        currentTab = NavigationTab.MY_LOANS
+                                    }
+                                }
                             )
                             NavigationTab.EXPENSES -> ExpenseTrackerScreen(
                                 expenses = userExpenses,
@@ -336,7 +373,8 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
                                     paymentLoanTarget = loan
                                 },
                                 onEarlySettle = { loan -> viewModel.settleLoanEarly(loan) },
-                                onToggleAutoPay = { loan, enable -> viewModel.toggleAutoPay(loan, enable) }
+                                onToggleAutoPay = { loan, enable -> viewModel.toggleAutoPay(loan, enable) },
+                                onNavigateToApplyForLoan = { currentTab = NavigationTab.APPLY_FOR_LOAN }
                             )
                             NavigationTab.AI_ASSISTANT -> LoanConnectAiScreen(
                                 user = user,
@@ -463,10 +501,20 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
                                 loans = userLoans,
                                 payments = userPayments,
                                 commissions = userCommissions,
-                                reports = emptyList(),
-                                tickets = emptyList(),
-                                auditLogs = emptyList(),
-                                onVerifyFinancier = { fId, status -> viewModel.updateFinancierVerification(fId, status) }
+                                reports = allReports,
+                                tickets = adminTickets,
+                                auditLogs = allAuditLogs,
+                                onVerifyFinancier = { fId, status -> viewModel.updateFinancierVerification(fId, status) },
+                                onReseedData = {
+                                    viewModel.reseedAllData { msg ->
+                                        scope.launch { snackbarHostState.showSnackbar(msg) }
+                                    }
+                                },
+                                onSyncFirebase = {
+                                    viewModel.syncAllDataToFirebase { ok, msg ->
+                                        scope.launch { snackbarHostState.showSnackbar(msg) }
+                                    }
+                                }
                             )
                         }
                     }
@@ -667,6 +715,102 @@ fun LoanConnectApp(viewModel: LoanConnectViewModel) {
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    // Loan Application Success Celebration Dialog
+    newlyAppliedLoan?.let { loan ->
+        Dialog(onDismissRequest = { newlyAppliedLoan = null }) {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(22.dp)
+                        .fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF67FDCD).copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color(0xFF059669),
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+
+                    Text(
+                        text = "Loan Approved & Disbursed!",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = "Your application was approved instantly. Disbursed funds are credited to your account.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Loan ID:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(loan.id, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Amount:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(formatCurrency(loan.principalAmount), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = LoanPrimary)
+                            }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Duration:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${loan.durationMonths} Months", fontWeight = FontWeight.Medium, fontSize = 12.sp)
+                            }
+                            if (loan.purpose.isNotEmpty()) {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Purpose:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(loan.purpose, fontWeight = FontWeight.Medium, fontSize = 12.sp)
+                                }
+                            }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Monthly EMI:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(formatCurrency(loan.nextInstallmentAmount), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("First Due Date:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(loan.nextDueDate, fontWeight = FontWeight.Medium, fontSize = 12.sp)
+                            }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Disbursal Tx:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(loan.disbursementTxId, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+
+                    Button(
+                        onClick = { newlyAppliedLoan = null },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("View in My Loans")
                     }
                 }
             }

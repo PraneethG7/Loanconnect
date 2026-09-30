@@ -33,7 +33,9 @@ fun AdminDashboardScreen(
     reports: List<UserReportEntity>,
     tickets: List<SupportTicketEntity>,
     auditLogs: List<AuditLogEntity>,
-    onVerifyFinancier: (financierId: String, status: VerificationStatus) -> Unit
+    onVerifyFinancier: (financierId: String, status: VerificationStatus) -> Unit,
+    onReseedData: () -> Unit = {},
+    onSyncFirebase: () -> Unit = {}
 ) {
     var selectedSection by remember { mutableIntStateOf(0) }
 
@@ -48,16 +50,51 @@ fun AdminDashboardScreen(
             .padding(16.dp)
             .testTag("admin_dashboard_screen")
     ) {
-        Text(
-            text = "Platform Admin HQ",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = "Regulatory oversight, KYC verification, dispute resolution, and audit logs.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Platform Admin HQ",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Regulatory oversight, KYC, and cloud data management.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Data Management Controls
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilledTonalButton(
+                onClick = onReseedData,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Seed All Data", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+            FilledTonalButton(
+                onClick = onSyncFirebase,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Sync to Firestore", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
 
         Spacer(modifier = Modifier.height(14.dp))
 

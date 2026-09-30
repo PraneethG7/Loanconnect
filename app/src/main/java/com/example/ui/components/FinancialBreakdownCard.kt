@@ -63,6 +63,14 @@ fun FinancialBreakdownCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (loan.purpose.isNotEmpty()) {
+                        Text(
+                            text = "Purpose: ${loan.purpose}",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
                 StatusBadge(status = loan.status.name)
             }

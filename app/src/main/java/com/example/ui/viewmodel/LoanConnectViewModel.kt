@@ -1,10 +1,12 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.ai.LoanConnectAiService
 import com.example.data.database.AppDatabase
+import com.example.data.firebase.FirebaseManager
 import com.example.data.model.*
 import com.example.data.repository.LoanConnectRepository
 import com.example.data.sample.DemoDataSeeder
@@ -25,12 +27,13 @@ class LoanConnectViewModel(application: Application) : AndroidViewModel(applicat
     private val db = AppDatabase.getDatabase(application)
     private val repo = LoanConnectRepository(db.loanConnectDao())
     private val aiService = LoanConnectAiService(application)
+    val firebaseManager = FirebaseManager(application)
 
     // Current User
-    private val _currentUserId = MutableStateFlow("user_b1") // Starts as Priya Sharma (Borrower)
+    private val _currentUserId = MutableStateFlow("")
     val currentUserId: StateFlow<String> = _currentUserId.asStateFlow()
 
-    private val _isLoggedIn = MutableStateFlow(true)
+    private val _isLoggedIn = MutableStateFlow(false)
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
     private val _authError = MutableStateFlow<String?>(null)
@@ -175,8 +178,65 @@ class LoanConnectViewModel(application: Application) : AndroidViewModel(applicat
     private val _selectedLanguage = MutableStateFlow("English")
     val selectedLanguage: StateFlow<String> = _selectedLanguage.asStateFlow()
 
+    private val _selectedModel = MutableStateFlow("gemini-3.5-flash")
+    val selectedModel: StateFlow<String> = _selectedModel.asStateFlow()
+
+    private val _isSearchGroundingEnabled = MutableStateFlow(true)
+    val isSearchGroundingEnabled: StateFlow<Boolean> = _isSearchGroundingEnabled.asStateFlow()
+
     private val _isAiLoading = MutableStateFlow(false)
     val isAiLoading: StateFlow<Boolean> = _isAiLoading.asStateFlow()
+
+    fun setSelectedModel(model: String) {
+        _selectedModel.value = model
+    }
+
+    fun toggleSearchGrounding(enabled: Boolean) {
+        _isSearchGroundingEnabled.value = enabled
+    }
+
+    fun clearChat() {
+        _aiMessages.value = listOf(
+            ChatMessage(
+                id = "msg-welcome",
+                sender = "ai",
+                text = "Hello! I am LoanConnect AI. You can ask me anything about your loans, upcoming payments, overdue borrowers, or calculate repayments. How can I help you today?"
+            )
+        )
+    }
+
+    fun signInWithGoogle(context: Context, role: UserRole = UserRole.BORROWER, onResult: (Boolean, String?) -> Unit) {
+        viewModelScope.launch {
+            _authError.value = null
+            val result = firebaseManager.signInWithGoogle(context)
+            if (result.isSuccess) {
+                val fUser = result.getOrNull()!!
+                val existing = repo.getUserByEmail(fUser.email ?: "")
+                val user = if (existing != null) {
+                    existing
+                } else {
+                    val newUser = UserEntity(
+                        id = fUser.uid,
+                        name = fUser.displayName ?: fUser.email?.substringBefore("@") ?: "Google User",
+                        email = fUser.email ?: "${fUser.uid}@loanconnect.io",
+                        phone = fUser.phoneNumber ?: "+91 98000 12345",
+                        role = role,
+                        verificationStatus = VerificationStatus.VERIFIED
+                    )
+                    repo.registerUser(newUser)
+                    newUser
+                }
+                firebaseManager.syncUserProfile(user)
+                _currentUserId.value = user.id
+                _isLoggedIn.value = true
+                onResult(true, null)
+            } else {
+                val errorMsg = result.exceptionOrNull()?.localizedMessage ?: "Google sign in failed"
+                _authError.value = errorMsg
+                onResult(false, errorMsg)
+            }
+        }
+    }
 
     // Last generated receipt for viewing
     private val _activeReceipt = MutableStateFlow<PaymentEntity?>(null)
@@ -185,6 +245,35 @@ class LoanConnectViewModel(application: Application) : AndroidViewModel(applicat
     init {
         viewModelScope.launch {
             DemoDataSeeder.seedIfNeeded(db.loanConnectDao())
+        }
+    }
+
+    fun reseedAllData(onComplete: (String) -> Unit = {}) {
+        viewModelScope.launch {
+            DemoDataSeeder.seedIfNeeded(db.loanConnectDao(), force = true)
+            onComplete("All platform demo datasets (users, loans, schedules, payments, budgets) refreshed successfully!")
+        }
+    }
+
+    fun syncAllDataToFirebase(onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val users = repo.getAllUsers().first()
+                for (u in users) {
+                    firebaseManager.syncUserProfile(u)
+                }
+                val loans = repo.getAllLoansForAdmin().first()
+                for (l in loans) {
+                    firebaseManager.syncLoan(l)
+                }
+                val payments = repo.getAllPaymentsForAdmin().first()
+                for (p in payments) {
+                    firebaseManager.syncPayment(p)
+                }
+                onResult(true, "Cloud sync complete: ${users.size} users, ${loans.size} loans, and ${payments.size} payments synced to Firestore.")
+            } catch (e: Exception) {
+                onResult(false, "Firestore sync failed: ${e.message}")
+            }
         }
     }
 
@@ -203,7 +292,7 @@ class LoanConnectViewModel(application: Application) : AndroidViewModel(applicat
                 _isLoggedIn.value = true
                 onResult(true)
             } else {
-                _authError.value = "Invalid email/phone or password. (Demo: password123)"
+                _authError.value = "Invalid email/phone or password. Please verify your credentials."
                 onResult(false)
             }
         }
@@ -257,6 +346,7 @@ class LoanConnectViewModel(application: Application) : AndroidViewModel(applicat
 
     fun logout() {
         _isLoggedIn.value = false
+        _currentUserId.value = ""
         _authError.value = null
     }
 
@@ -384,6 +474,11 @@ class LoanConnectViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             val payment = repo.recordPayment(loan, amount, method, notes, isOffline)
             _activeReceipt.value = payment
+            firebaseManager.syncPayment(payment)
+            val updated = repo.getLoanByIdSync(loan.id)
+            if (updated != null) {
+                firebaseManager.syncLoan(updated)
+            }
         }
     }
 
@@ -391,6 +486,11 @@ class LoanConnectViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             val payment = repo.settleLoanEarly(loan)
             _activeReceipt.value = payment
+            firebaseManager.syncPayment(payment)
+            val updated = repo.getLoanByIdSync(loan.id)
+            if (updated != null) {
+                firebaseManager.syncLoan(updated)
+            }
         }
     }
 
@@ -455,6 +555,33 @@ class LoanConnectViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    fun applyForLoan(
+        requestedAmount: Double,
+        durationMonths: Int,
+        purpose: String,
+        financier: UserEntity? = null,
+        interestRate: Double = 10.0,
+        paymentFrequency: String = "Monthly",
+        onSuccess: (LoanEntity) -> Unit = {}
+    ) {
+        val user = currentUser.value ?: return
+        viewModelScope.launch {
+            val loan = repo.applyForLoan(
+                borrowerId = user.id,
+                borrowerName = user.name,
+                requestedAmount = requestedAmount,
+                durationMonths = durationMonths,
+                purpose = purpose,
+                financierId = financier?.id,
+                financierName = financier?.businessName?.ifEmpty { financier.name },
+                interestRate = interestRate,
+                paymentFrequency = paymentFrequency
+            )
+            firebaseManager.syncLoan(loan)
+            onSuccess(loan)
+        }
+    }
+
     fun rejectOffer(offer: LoanOfferEntity) {
         viewModelScope.launch {
             repo.rejectOffer(offer)
@@ -494,26 +621,37 @@ class LoanConnectViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    fun sendAiMessage(prompt: String) {
+    fun sendAiMessage(
+        prompt: String,
+        modelOverride: String? = null,
+        searchOverride: Boolean? = null,
+        onComplete: ((String) -> Unit)? = null
+    ) {
         val user = currentUser.value ?: return
         val currentLoans = userLoans.value
         val currentPayments = userPayments.value
         val lang = _selectedLanguage.value
+        val model = modelOverride ?: _selectedModel.value
+        val useSearch = searchOverride ?: _isSearchGroundingEnabled.value
 
         val userMsg = ChatMessage(
             id = "msg-${System.currentTimeMillis()}-u",
             sender = "user",
             text = prompt
         )
-        _aiMessages.value = _aiMessages.value + userMsg
+        val updatedList = _aiMessages.value + userMsg
+        _aiMessages.value = updatedList
         _isAiLoading.value = true
 
         viewModelScope.launch {
-            val response = aiService.queryAi(
-                prompt = prompt,
+            val history = updatedList.map { it.sender to it.text }
+            val response = aiService.queryMultiTurnAi(
+                conversationHistory = history,
                 currentUser = user,
                 loans = currentLoans,
                 payments = currentPayments,
+                modelName = model,
+                enableSearchGrounding = useSearch,
                 language = lang
             )
             val aiMsg = ChatMessage(
@@ -523,6 +661,7 @@ class LoanConnectViewModel(application: Application) : AndroidViewModel(applicat
             )
             _aiMessages.value = _aiMessages.value + aiMsg
             _isAiLoading.value = false
+            onComplete?.invoke(response)
         }
     }
 

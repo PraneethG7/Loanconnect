@@ -46,13 +46,13 @@ fun AuthScreen(
         rate: Double,
         interestType: InterestType
     ) -> Unit,
-    onQuickDemoLogin: (userId: String) -> Unit
+    onGoogleSignIn: () -> Unit = {}
 ) {
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Sign In, 1 = Create Account
 
-    // Sign In form fields
-    var loginIdentifier by remember { mutableStateOf("priya.sharma@gmail.com") }
-    var loginPassword by remember { mutableStateOf("password123") }
+    // Sign In form fields (clean, no pre-filled examples)
+    var loginIdentifier by remember { mutableStateOf("") }
+    var loginPassword by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
 
     // Register form fields
@@ -63,16 +63,19 @@ fun AuthScreen(
     var regPassword by remember { mutableStateOf("") }
     var regAddress by remember { mutableStateOf("") }
     var regBusinessName by remember { mutableStateOf("") }
-    var regServiceArea by remember { mutableStateOf("Bangalore & South Region") }
-    var regMinAmountText by remember { mutableStateOf("10000") }
-    var regMaxAmountText by remember { mutableStateOf("500000") }
-    var regRateText by remember { mutableStateOf("10.0") }
+    var regRegistrationId by remember { mutableStateOf("") }
+    var regServiceArea by remember { mutableStateOf("") }
+    var regMinAmountText by remember { mutableStateOf("") }
+    var regMaxAmountText by remember { mutableStateOf("") }
+    var regRateText by remember { mutableStateOf("") }
+    var regAdminPasscode by remember { mutableStateOf("") }
     var regInterestType by remember { mutableStateOf(InterestType.MONTHLY) }
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
+            .imePadding()
             .testTag("auth_screen"),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -97,58 +100,10 @@ fun AuthScreen(
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = "Secure Financial Lending & Payment Platform",
+                text = "Secure Role-Based Financial Platform",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
-
-        // Quick Demo Login Chips
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Text(
-                        text = "1-Tap Quick Demo Sign In",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { onQuickDemoLogin("user_b1") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
-                        ) {
-                            Text("Borrower", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                        OutlinedButton(
-                            onClick = { onQuickDemoLogin("user_f1") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
-                        ) {
-                            Text("Financier", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                        OutlinedButton(
-                            onClick = { onQuickDemoLogin("user_admin") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
-                        ) {
-                            Text("Admin", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
         }
 
         // Auth Tabs: Sign In / Create Account
@@ -233,19 +188,110 @@ fun AuthScreen(
                     enabled = loginIdentifier.isNotBlank() && loginPassword.isNotBlank(),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp),
+                        .height(52.dp)
+                        .testTag("login_button"),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(Icons.Default.Login, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Secure Sign In", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text("Login", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    HorizontalDivider(modifier = Modifier.weight(1f))
+                    Text(
+                        text = " OR ",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+                    HorizontalDivider(modifier = Modifier.weight(1f))
+                }
+            }
+
+            item {
+                OutlinedButton(
+                    onClick = onGoogleSignIn,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .testTag("google_signin_button"),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AccountCircle,
+                        contentDescription = "Google Sign In",
+                        tint = LoanPrimary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Sign in with Google",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                }
+            }
+
+            // Quick Demo Accounts
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Instant Demo Access (All Pre-Loaded Roles)",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            FilledTonalButton(
+                                onClick = { onLogin("priya.sharma@gmail.com", "password123") },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                            ) {
+                                Text("Borrower", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                            FilledTonalButton(
+                                onClick = { onLogin("ramesh@rameshfinance.com", "password123") },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                            ) {
+                                Text("Financier", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                            FilledTonalButton(
+                                onClick = { onLogin("admin@loanconnect.io", "password123") },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                            ) {
+                                Text("Admin", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
                 }
             }
         } else {
             // CREATE ACCOUNT TAB
             item {
                 Text(
-                    text = "Select Account Type",
+                    text = "Choose Account Type",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.fillMaxWidth()
@@ -253,18 +299,24 @@ fun AuthScreen(
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     FilterChip(
                         selected = regRole == UserRole.BORROWER,
                         onClick = { regRole = UserRole.BORROWER },
-                        label = { Text("Borrower / Common User") },
+                        label = { Text("Borrower", fontSize = 12.sp) },
                         modifier = Modifier.weight(1f)
                     )
                     FilterChip(
                         selected = regRole == UserRole.FINANCIER,
                         onClick = { regRole = UserRole.FINANCIER },
-                        label = { Text("Financier / Lender") },
+                        label = { Text("Financier", fontSize = 12.sp) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = regRole == UserRole.ADMIN,
+                        onClick = { regRole = UserRole.ADMIN },
+                        label = { Text("Admin", fontSize = 12.sp) },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -274,7 +326,7 @@ fun AuthScreen(
                 OutlinedTextField(
                     value = regName,
                     onValueChange = { regName = it },
-                    label = { Text("Full Legal Name") },
+                    label = { Text("Full Name") },
                     leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -299,7 +351,7 @@ fun AuthScreen(
                 OutlinedTextField(
                     value = regPhone,
                     onValueChange = { regPhone = it },
-                    label = { Text("Mobile Phone (+91)") },
+                    label = { Text("Phone Number") },
                     leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     modifier = Modifier.fillMaxWidth(),
@@ -312,7 +364,7 @@ fun AuthScreen(
                 OutlinedTextField(
                     value = regPassword,
                     onValueChange = { regPassword = it },
-                    label = { Text("Create Secure Password") },
+                    label = { Text("Password or Security PIN") },
                     leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -326,18 +378,18 @@ fun AuthScreen(
                 OutlinedTextField(
                     value = regAddress,
                     onValueChange = { regAddress = it },
-                    label = { Text("Residential / Business Address") },
+                    label = { Text("Address / Location") },
                     leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
             }
 
-            // Financier specific fields
+            // Financier specific fields: Business / Verification Info
             if (regRole == UserRole.FINANCIER) {
                 item {
                     Text(
-                        text = "Financier Business & Terms Details",
+                        text = "Business / Verification Info",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = LoanPrimary,
@@ -349,8 +401,20 @@ fun AuthScreen(
                     OutlinedTextField(
                         value = regBusinessName,
                         onValueChange = { regBusinessName = it },
-                        label = { Text("Registered Business / Agency Name") },
+                        label = { Text("Business / Entity Name") },
                         leadingIcon = { Icon(Icons.Default.Business, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = regRegistrationId,
+                        onValueChange = { regRegistrationId = it },
+                        label = { Text("Registration ID / License No.") },
+                        leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         singleLine = true
@@ -378,6 +442,7 @@ fun AuthScreen(
                             value = regMinAmountText,
                             onValueChange = { regMinAmountText = it.filter { ch -> ch.isDigit() } },
                             label = { Text("Min Loan (₹)") },
+                            placeholder = { Text("5000") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp),
@@ -387,6 +452,7 @@ fun AuthScreen(
                             value = regMaxAmountText,
                             onValueChange = { regMaxAmountText = it.filter { ch -> ch.isDigit() } },
                             label = { Text("Max Loan (₹)") },
+                            placeholder = { Text("500000") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp),
@@ -400,7 +466,34 @@ fun AuthScreen(
                         value = regRateText,
                         onValueChange = { regRateText = it },
                         label = { Text("Standard Interest Rate (%)") },
+                        placeholder = { Text("10.0") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+                }
+            }
+
+            // Admin specific info
+            if (regRole == UserRole.ADMIN) {
+                item {
+                    Text(
+                        text = "Platform Admin Verification",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = LoanPrimary,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = regAdminPasscode,
+                        onValueChange = { regAdminPasscode = it },
+                        label = { Text("Platform Admin Access Code") },
+                        placeholder = { Text("Enter admin access code") },
+                        leadingIcon = { Icon(Icons.Default.AdminPanelSettings, contentDescription = null) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         singleLine = true
@@ -414,15 +507,20 @@ fun AuthScreen(
                         val minAmt = regMinAmountText.toDoubleOrNull() ?: 5000.0
                         val maxAmt = regMaxAmountText.toDoubleOrNull() ?: 500000.0
                         val rate = regRateText.toDoubleOrNull() ?: 10.0
+                        val effectiveBizName = if (regRegistrationId.isNotBlank()) {
+                            "${regBusinessName.trim()} [ID: ${regRegistrationId.trim()}]"
+                        } else {
+                            regBusinessName.trim()
+                        }
                         onRegister(
                             regName,
                             regEmail,
                             regPhone,
                             regPassword,
                             regRole,
-                            regBusinessName,
+                            effectiveBizName,
                             regAddress,
-                            regServiceArea,
+                            regServiceArea.ifBlank { "All Regions" },
                             minAmt,
                             maxAmt,
                             rate,
@@ -432,12 +530,13 @@ fun AuthScreen(
                     enabled = regName.isNotBlank() && regEmail.isNotBlank() && regPhone.isNotBlank() && regPassword.isNotBlank(),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp),
+                        .height(52.dp)
+                        .testTag("create_account_button"),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(Icons.Default.PersonAdd, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Register & Access Dashboard", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text("Create Account", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }
             }
         }

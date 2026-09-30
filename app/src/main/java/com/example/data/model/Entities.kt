@@ -173,6 +173,7 @@ data class LoanEntity(
     val disbursementTxId: String = "",
     val agreementAcceptedAt: Long = System.currentTimeMillis(),
     val isAutoPayEnabled: Boolean = false,
+    val purpose: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )
 

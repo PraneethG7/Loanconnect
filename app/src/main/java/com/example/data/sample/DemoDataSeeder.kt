@@ -7,9 +7,10 @@ import kotlinx.coroutines.withContext
 
 object DemoDataSeeder {
 
-    suspend fun seedIfNeeded(dao: LoanConnectDao) = withContext(Dispatchers.IO) {
+    suspend fun seedIfNeeded(dao: LoanConnectDao, force: Boolean = false) = withContext(Dispatchers.IO) {
         val existing = dao.getUserByIdSync("user_f1")
-        if (existing != null) return@withContext
+        val existingLoan = dao.getLoanByIdSync("LOAN-000101")
+        if (!force && existing != null && existingLoan != null) return@withContext
 
         // 1. Users
         val users = listOf(
@@ -128,7 +129,8 @@ object DemoDataSeeder {
                 durationMonths = 12,
                 status = LoanStatus.ACTIVE,
                 disbursementTxId = "DISB-TXN-887192",
-                isAutoPayEnabled = true
+                isAutoPayEnabled = true,
+                purpose = "Working Capital & Inventory"
             ),
             LoanEntity(
                 id = "LOAN-000102",
@@ -153,7 +155,8 @@ object DemoDataSeeder {
                 durationMonths = 12,
                 status = LoanStatus.ACTIVE,
                 disbursementTxId = "DISB-TXN-552140",
-                isAutoPayEnabled = false
+                isAutoPayEnabled = false,
+                purpose = "Home Renovation & Solar Setup"
             ),
             LoanEntity(
                 id = "LOAN-000103",
@@ -178,7 +181,8 @@ object DemoDataSeeder {
                 durationMonths = 6,
                 status = LoanStatus.OVERDUE,
                 disbursementTxId = "DISB-TXN-339901",
-                isAutoPayEnabled = false
+                isAutoPayEnabled = false,
+                purpose = "Medical Emergency & Treatment"
             ),
             LoanEntity(
                 id = "LOAN-000104",
@@ -203,7 +207,8 @@ object DemoDataSeeder {
                 durationMonths = 6,
                 status = LoanStatus.COMPLETED,
                 disbursementTxId = "DISB-TXN-110099",
-                isAutoPayEnabled = false
+                isAutoPayEnabled = false,
+                purpose = "Agricultural Equipment"
             )
         )
         dao.insertLoans(loans)

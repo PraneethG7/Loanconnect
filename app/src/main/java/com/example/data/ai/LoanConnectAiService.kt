@@ -1,6 +1,7 @@
 package com.example.data.ai
 
 import android.content.Context
+import android.util.Log
 import com.example.BuildConfig
 import com.example.data.model.*
 import kotlinx.coroutines.Dispatchers
@@ -15,17 +16,32 @@ import java.util.concurrent.TimeUnit
 
 class LoanConnectAiService(private val context: Context) {
 
+    private val tag = "LoanConnectAiService"
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    suspend fun queryAi(
-        prompt: String,
+    private class RateLimitException(message: String) : Exception(message)
+
+    /**
+     * Executes a multi-turn chat request using the Gemini API.
+     * Supports:
+     * - Multi-turn conversation history
+     * - Role-specific system instructions
+     * - Models: gemini-3.1-pro-preview, gemini-3.5-flash, gemini-2.5-flash, gemini-3.1-flash-lite-preview
+     * - Google Search Grounding for real-time market data
+     * - Automatic model fallback & local fintech engine when rate limits (429) or quota exceeded occur
+     */
+    suspend fun queryMultiTurnAi(
+        conversationHistory: List<Pair<String, String>>, // list of (sender, text)
         currentUser: UserEntity,
         loans: List<LoanEntity>,
         payments: List<PaymentEntity>,
+        modelName: String = "gemini-3.5-flash",
+        enableSearchGrounding: Boolean = true,
         language: String = "English"
     ): String = withContext(Dispatchers.IO) {
         val apiKey = try {
@@ -34,18 +50,97 @@ class LoanConnectAiService(private val context: Context) {
             ""
         }
 
-        // Prepare context data isolated for this user
         val summaryContext = buildUserFinancialContext(currentUser, loans, payments)
+        val systemInstruction = buildRoleSystemInstruction(currentUser.role, summaryContext, language, modelName)
 
         if (!apiKey.isNullOrBlank() && apiKey != "MY_GEMINI_API_KEY") {
-            try {
-                return@withContext callGeminiRest(prompt, summaryContext, language, apiKey)
-            } catch (e: Exception) {
-                // Graceful fallback to smart financial rules engine
+            val candidateModels = listOf(
+                modelName,
+                "gemini-2.5-flash",
+                "gemini-flash-latest",
+                "gemini-3.1-flash-lite-preview"
+            ).distinct()
+
+            for (candidate in candidateModels) {
+                try {
+                    val result = callGeminiApi(
+                        conversationHistory = conversationHistory,
+                        systemInstruction = systemInstruction,
+                        model = candidate,
+                        enableSearchGrounding = enableSearchGrounding && candidate == "gemini-3.5-flash",
+                        apiKey = apiKey
+                    )
+                    if (result.isNotBlank()) {
+                        return@withContext result
+                    }
+                } catch (e: RateLimitException) {
+                    Log.w(tag, "Model $candidate rate-limited or quota exceeded (429), checking next fallback...")
+                } catch (e: Exception) {
+                    Log.w(tag, "Model $candidate request error: ${e.message}")
+                }
             }
         }
 
-        return@withContext generateSmartFinancialResponse(prompt, currentUser, loans, payments, language)
+        // Seamless fallback to local high-precision fintech intelligence engine
+        val latestPrompt = conversationHistory.lastOrNull { it.first == "user" }?.second ?: ""
+        return@withContext generateSmartFinancialResponse(latestPrompt, currentUser, loans, payments, language)
+    }
+
+    suspend fun queryAi(
+        prompt: String,
+        currentUser: UserEntity,
+        loans: List<LoanEntity>,
+        payments: List<PaymentEntity>,
+        language: String = "English"
+    ): String {
+        return queryMultiTurnAi(
+            conversationHistory = listOf("user" to prompt),
+            currentUser = currentUser,
+            loans = loans,
+            payments = payments,
+            modelName = "gemini-3.5-flash",
+            enableSearchGrounding = true,
+            language = language
+        )
+    }
+
+    private fun buildRoleSystemInstruction(
+        role: UserRole,
+        financialContext: String,
+        language: String,
+        modelName: String
+    ): String {
+        val roleSpecifics = when (role) {
+            UserRole.BORROWER -> """
+                ROLE: Empathetic Borrower Loan Advisor & Budget Coach.
+                OBJECTIVE: Help the borrower understand repayment schedules, explain loan contracts in clear everyday language, calculate early settlement savings, and suggest budget adjustments to prevent default. Always prioritize borrower financial well-being and transparency.
+            """.trimIndent()
+            UserRole.FINANCIER -> """
+                ROLE: Prudent Portfolio Risk & Smart Collection Analyst.
+                OBJECTIVE: Help the financier monitor capital recovery, prioritize overdue accounts with compliant follow-up plans, calculate portfolio yields and commissions, and maintain ethical lending practices.
+            """.trimIndent()
+            UserRole.ADMIN -> """
+                ROLE: Platform Compliance & Integrity Officer.
+                OBJECTIVE: Monitor overall platform liquidity, detect abnormal interest rate violations, inspect platform fee compliance, and assist with disputes and support audits.
+            """.trimIndent()
+        }
+
+        val voiceGuidance = if (modelName == "gemini-3.8-live") {
+            "VOICE MODE ACTIVE: Deliver answers in conversational spoken style. Keep responses natural, concise, and easy to listen to without complex markdown formatting."
+        } else ""
+
+        return """
+            You are LoanConnect AI, an intelligent fintech assistant embedded inside the LoanConnect platform.
+            $roleSpecifics
+            $voiceGuidance
+            
+            LANGUAGE: Respond fluently in $language (or translate if asked).
+            ACCURACY: Use the provided [AUTHORIZED USER CONTEXT] data below as the primary source of truth for the user's loans. Never disclose private data of other unrelated users.
+            COMPLIANCE: Remind users that loan disbursement and payments must be finalized with direct authorization in the UI.
+            
+            [AUTHORIZED USER CONTEXT]
+            $financialContext
+        """.trimIndent()
     }
 
     private fun buildUserFinancialContext(
@@ -74,58 +169,108 @@ class LoanConnectAiService(private val context: Context) {
                 val remainingOwed = loans.sumOf { maxOf(0.0, it.totalPayable - it.totalPaid) }
                 append("Total Payable: ₹$totalPayable, Paid: ₹$totalPaid, Remaining Owed: ₹$remainingOwed\n")
                 loans.forEach {
-                    append(" - Loan ${it.id} from ${it.financierName}: Remaining ₹${it.totalPayable - it.totalPaid}, Next Due: ${it.nextDueDate} (₹${it.nextInstallmentAmount})\n")
+                    append(" - Loan ${it.id} (${it.purpose}) from ${it.financierName}: Remaining ₹${it.totalPayable - it.totalPaid}, Next Due: ${it.nextDueDate} (₹${it.nextInstallmentAmount})\n")
                 }
             }
         }
     }
 
-    private fun callGeminiRest(
-        prompt: String,
-        contextData: String,
-        language: String,
+    private fun callGeminiApi(
+        conversationHistory: List<Pair<String, String>>,
+        systemInstruction: String,
+        model: String,
+        enableSearchGrounding: Boolean,
         apiKey: String
     ): String {
-        val systemPrompt = """
-            You are LoanConnect AI, an intelligent, empathetic, and compliant fintech financial assistant.
-            The user is speaking or typing in: $language.
-            Respond accurately in $language (or translate if requested).
-            Use only the authorized context data provided below. Never make up loans or disclose other users' data.
-            Keep responses concise, clear, and formatted for mobile screens.
-            If the user asks to execute a payment or disburse funds, remind them that transactions require manual authorization on the payment screen.
-            
-            [AUTHORIZED CONTEXT]
-            $contextData
-        """.trimIndent()
+        // Multi-turn contents array
+        val contentsArray = JSONArray()
 
-        val jsonBody = JSONObject().apply {
-            put("contents", JSONArray().apply {
-                put(JSONObject().apply {
-                    put("parts", JSONArray().apply {
-                        put(JSONObject().put("text", "$systemPrompt\n\nUser Question: $prompt"))
-                    })
+        conversationHistory.forEach { (sender, text) ->
+            val role = if (sender == "user") "user" else "model"
+            val contentObj = JSONObject().apply {
+                put("role", role)
+                put("parts", JSONArray().apply {
+                    put(JSONObject().put("text", text))
                 })
-            })
+            }
+            contentsArray.put(contentObj)
         }
 
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
+        val jsonBody = JSONObject().apply {
+            put("contents", contentsArray)
+
+            // System instruction
+            put("systemInstruction", JSONObject().apply {
+                put("parts", JSONArray().apply {
+                    put(JSONObject().put("text", systemInstruction))
+                })
+            })
+
+            // Search Grounding tool (gemini-3.5-flash)
+            if (enableSearchGrounding) {
+                put("tools", JSONArray().apply {
+                    put(JSONObject().put("googleSearch", JSONObject()))
+                })
+            }
+        }
+
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
         val request = Request.Builder()
             .url(url)
             .post(jsonBody.toString().toRequestBody("application/json".toMediaType()))
             .build()
 
         client.newCall(request).execute().use { response ->
+            val resStr = response.body?.string() ?: ""
             if (!response.isSuccessful) {
+                if (response.code == 429 || resStr.contains("RESOURCE_EXHAUSTED", ignoreCase = true)) {
+                    Log.w(tag, "Gemini API rate limit or quota exceeded (HTTP 429). Will use fallback.")
+                    throw RateLimitException("Quota exceeded: 429")
+                }
+                Log.w(tag, "Gemini API non-200 response: ${response.code}")
                 throw RuntimeException("API error: ${response.code}")
             }
-            val resStr = response.body?.string() ?: ""
+
             val resJson = JSONObject(resStr)
             val candidates = resJson.optJSONArray("candidates")
             val firstCandidate = candidates?.optJSONObject(0)
             val content = firstCandidate?.optJSONObject("content")
             val parts = content?.optJSONArray("parts")
-            val text = parts?.optJSONObject(0)?.optString("text")
-            return text ?: "I am ready to help you with your loans."
+
+            var responseText = ""
+            if (parts != null && parts.length() > 0) {
+                for (i in 0 until parts.length()) {
+                    val part = parts.optJSONObject(i)
+                    val t = part?.optString("text", "") ?: ""
+                    if (t.isNotEmpty()) {
+                        responseText += t
+                    }
+                }
+            }
+
+            // Extract Google Search Grounding metadata citations if present
+            val groundingMetadata = firstCandidate?.optJSONObject("groundingMetadata")
+            if (groundingMetadata != null) {
+                val webSearchQueries = groundingMetadata.optJSONArray("webSearchQueries")
+                val searchChunks = groundingMetadata.optJSONArray("groundingChunks")
+                if (searchChunks != null && searchChunks.length() > 0) {
+                    val sources = mutableListOf<String>()
+                    for (i in 0 until searchChunks.length()) {
+                        val chunk = searchChunks.optJSONObject(i)
+                        val web = chunk?.optJSONObject("web")
+                        val title = web?.optString("title")
+                        val uri = web?.optString("uri")
+                        if (!title.isNullOrEmpty() && !uri.isNullOrEmpty()) {
+                            sources.add("• [$title]($uri)")
+                        }
+                    }
+                    if (sources.isNotEmpty()) {
+                        responseText += "\n\n🌐 **Verified Sources (Google Search):**\n" + sources.take(3).joinToString("\n")
+                    }
+                }
+            }
+
+            return if (responseText.isNotEmpty()) responseText else "I've processed your request."
         }
     }
 
@@ -198,13 +343,26 @@ class LoanConnectAiService(private val context: Context) {
                 p.contains("explain") || p.contains("terms") || p.contains("agreement") -> {
                     val loan = loans.firstOrNull()
                     if (loan != null) {
-                        "Your loan ${loan.id} with ${loan.financierName} has a principal of ₹${String.format("%,.0f", loan.principalAmount)} at ${loan.interestRate}% ${loan.interestType.name.lowercase()} interest. Total payable is ₹${String.format("%,.0f", loan.totalPayable)}. You have paid ₹${String.format("%,.0f", loan.totalPaid)} so far."
+                        "Your loan ${loan.id} with ${loan.financierName} has a principal of ₹${String.format("%,.0f", loan.principalAmount)} at ${loan.interestRate}% ${loan.interestType.name.lowercase()} interest for ${loan.purpose}. Total payable is ₹${String.format("%,.0f", loan.totalPayable)}. You have paid ₹${String.format("%,.0f", loan.totalPaid)} so far."
                     } else {
                         "LoanConnect offers transparent loans with disclosed interest rates, zero hidden charges, and flexible repayment terms."
                     }
                 }
+                p.contains("calculate") || p.contains("emi") -> {
+                    val sampleP = 50000.0
+                    val sampleR = 10.0 / 1200.0
+                    val sampleN = 12
+                    val emi = (sampleP * sampleR * Math.pow(1.0 + sampleR, sampleN.toDouble())) / (Math.pow(1.0 + sampleR, sampleN.toDouble()) - 1.0)
+                    "EMI Calculation Formula: E = P × r × (1+r)^n / ((1+r)^n - 1). For example, a ₹50,000 loan over 12 months at 10% annual interest results in an EMI of ₹${String.format("%,.0f", emi)}/month. Total interest: ₹${String.format("%,.0f", (emi * 12) - sampleP)}."
+                }
+                p.contains("rbi") || p.contains("guideline") || p.contains("regulation") || p.contains("rule") -> {
+                    "Under RBI NBFC-P2P Directions and Fair Practices Code, individual borrower aggregate exposure is capped at ₹10 Lakhs across all P2P platforms. Escrow mechanisms are mandatory for all disbursements and repayments, and full APR fee disclosure is strictly required."
+                }
+                p.contains("inflation") || p.contains("repo") || p.contains("market") -> {
+                    "The Reserve Bank of India (RBI) repo rate is benchmarked at 6.50% to maintain CPI inflation within the 4.0% (+/- 2%) target band. LoanConnect peer financiers offer rates typically between 9.5% and 14.5% based on borrower credit profile."
+                }
                 else -> {
-                    "Hello ${user.name}! I am your LoanConnect Assistant. You can ask: 'How much do I still owe?', 'When is my next payment?', 'How much have I paid?', or 'Explain my loan'."
+                    "Hello ${user.name}! I am your LoanConnect AI Assistant. You have ${loans.size} active loan account(s). You can ask me about your outstanding balance, next installment due date, early settlement calculations, RBI guidelines, or EMI comparisons."
                 }
             }
         }
